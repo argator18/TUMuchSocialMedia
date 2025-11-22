@@ -72,7 +72,7 @@ class _ReasonPageState extends State<ReasonPage> {
       _replyMessage = null;
     });
 
-    final uri = Uri.parse('http://131.159.203.70:8000/echo');
+    final uri = Uri.parse('http://3.74.158.108:8000/echo');
     final payload = {
       // simplest: encode app + reason together
       'text': '[${widget.appName}] $text',
