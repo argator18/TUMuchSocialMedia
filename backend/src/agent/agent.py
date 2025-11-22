@@ -4,10 +4,8 @@ from dotenv import load_dotenv
 import uuid
 import asyncio
 
-load_dotenv(dotenv_path="/home/andy/apps/hackatum/TUMuchSocialMedia/.env")
-
-from helpers import *
-from prompts import *
+from .helpers import *
+from .prompts import *
 
 # ==================================
 #           Agents
