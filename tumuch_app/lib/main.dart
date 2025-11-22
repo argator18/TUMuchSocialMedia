@@ -24,7 +24,7 @@ class MyApp extends StatelessWidget {
       // Routen (jetzt umgekehrt)
       routes: {
         '/goals': (context) => const AppConfigs(), // goals bleibt als Route, falls benötigt
-        
+        '/reason': (context) => const ReasonPage(),
       },
     );
   }
