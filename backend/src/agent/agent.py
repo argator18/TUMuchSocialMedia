@@ -1,6 +1,5 @@
 #%%  
 import os
-from dotenv import load_dotenv
 import uuid
 import asyncio
 
@@ -12,8 +11,10 @@ from .prompts import *
 # ==================================
 
 # %%
+async def analyzer_user_behaviour(user_id: str, past_day: int):
+    pass
 
-async def ask_for_app_permission(user_id, query: str):
+async def ask_for_app_permission(user_id: str, query: str):
 
     # for testing
     user_preferences = "The user asking is Tim. He is very ambitionate and in his exam period and want you to be very strict with him"
@@ -22,13 +23,22 @@ async def ask_for_app_permission(user_id, query: str):
 
     PERSONALITY_PROMPT = PERSONALITY_MAP[user_fav_personality]
 
+    user_log = get_user_log(user_id, time_delay=24)
+
+    # TODO add here user app usage statistics
     context = f"""
     CONTEXT:
 
     The users name is: {user_name}
 
-    
+    The user has the following history of asking for allowance for the day:     
+
+    {user_log} 
+
     """
+
+    print(user_pref)
+    print(context)
 
     messages = [
         {
@@ -53,20 +63,25 @@ async def ask_for_app_permission(user_id, query: str):
         }
     ]
 
-    anwser = send_simple_query(messages, response_schema=BouncerAnswerFormat)
+    answer = send_simple_query(messages, response_schema=BouncerAnswerFormat)
 
-    return anwser
+    update_log(user_id, query, answer.dict())
+
+    return answer
 
 
 # %%
+def main():
+    mikey = "682596a5-7863-4419-9138-5f52c2779e61" 
+    donatello = "ab7b6c53-f4b0-4238-ac64-da383193425d"
+    #query = "I just scrolled for 10 minuts and would like some more"
+    query = input("Type the query: ")
 
+    answer = asyncio.run(ask_for_app_permission(donatello, query))
+    print(answer)
 
 if __name__ == "__main__":
+    main()
 
-    u_id = "682596a5-7863-4419-9138-5f52c2779e61" 
-    query = "I just quickly want to open insta to follow a colleague"
-
-    answer = asyncio.run(ask_for_app_permission(u_id, query))
-    print(answer)
 
 # %%
