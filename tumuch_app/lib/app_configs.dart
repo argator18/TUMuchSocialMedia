@@ -214,7 +214,7 @@ class _AppConfigsState extends State<AppConfigs> {
                 child: FilledButton.icon(
                   onPressed: _submitGoals,
                   icon: const Icon(Icons.save),
-                  label: const Text('Speichern'), // AKTUALISIERT
+                  label: const Text('Save'), // AKTUALISIERT
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     textStyle: const TextStyle(fontSize: 18),

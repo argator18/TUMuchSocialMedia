@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+// Import der LongTermGoalsPage wird nicht mehr benötigt, da die Navigation von außen erfolgt, 
+// aber wir lassen es drin, falls es woanders benötigt wird.
+import 'app_configs.dart'; 
 
 class ReasonPage extends StatefulWidget {
   const ReasonPage({super.key});
@@ -36,6 +39,8 @@ class _ReasonPageState extends State<ReasonPage> {
       // Check & request permission
       final hasPermission = await _recorder.hasPermission();
       if (!hasPermission) {
+        // HINWEIS: Auf Android/iOS muss die Berechtigung in der Manifest/Info.plist 
+        // Datei konfiguriert werden, damit dies funktioniert.
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('No microphone permission.'),
@@ -79,14 +84,23 @@ class _ReasonPageState extends State<ReasonPage> {
       return;
     }
 
+    // Grund wurde erfasst (hier würden Sie ihn in der Datenbank speichern)
     debugPrint('Text reason: $textReason');
     debugPrint('Recorded audio path: $_audioPath');
 
+    // **AKTUALISIERT:** Zeige eine Bestätigung an und gehe zurück, 
+    // da dies nun das Ende des initialen Eingabeflusses ist.
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Thanks! Your input is captured (locally for now).'),
+        content: Text('Grund erfasst! Sie können jetzt zum Hauptmenü fortfahren.'),
+        duration: Duration(seconds: 2),
       ),
     );
+    
+    // Nach kurzem Warten (damit der Benutzer die Meldung sieht) zur vorherigen Seite zurückkehren.
+    Future.delayed(const Duration(milliseconds: 500), () {
+        Navigator.pop(context); 
+    });
   }
 
   @override
@@ -95,7 +109,7 @@ class _ReasonPageState extends State<ReasonPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Welcome'),
+        title: const Text('Mein Grund'), // Titel aktualisiert
         backgroundColor: colorScheme.inversePrimary,
       ),
       body: SafeArea(
@@ -173,7 +187,7 @@ class _ReasonPageState extends State<ReasonPage> {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: _submit,
-                  child: const Text('Continue'),
+                  child: const Text('Confirm and finish'), // Text aktualisiert
                 ),
               ),
             ],
@@ -183,4 +197,3 @@ class _ReasonPageState extends State<ReasonPage> {
     );
   }
 }
-
