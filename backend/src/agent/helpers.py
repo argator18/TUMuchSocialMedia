@@ -144,9 +144,9 @@ def delete_user_logs(user_id):
 
 def send_simple_query(messages, response_schema):
     response = client.responses.parse(
-        model="gpt-5.1-mini",   
+        model="gpt-5.1",   
         input=messages,
-        response_format=response_schema,  
+        text_format=response_schema, 
     )
     return response.output_parsed
 
