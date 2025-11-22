@@ -195,8 +195,8 @@ class _AppConfigsState extends State<AppConfigs> {
               
               // 3. Browser-Checkbox
               SwitchListTile(
-                title: const Text('Social Media Nutzung im Browser einschließen'),
-                subtitle: const Text('Aktivieren Sie dies, um auch die Zeit über Chrome, Safari, etc. zu erfassen.'),
+                title: const Text('Include Social media usage through browser.'),
+                subtitle: const Text('Activate this to include'),
                 value: _includeBrowser,
                 onChanged: (bool value) {
                   setState(() {
