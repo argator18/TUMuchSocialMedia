@@ -11,8 +11,10 @@ from .prompts import *
 # ==================================
 
 # %%
+async def analyzer_user_behaviour(user_id: str, past_day: int):
+    pass
 
-async def ask_for_app_permission(user_id, query: str):
+async def ask_for_app_permission(user_id: str, query: str):
 
     # for testing
     user_preferences = "The user asking is Tim. He is very ambitionate and in his exam period and want you to be very strict with him"

@@ -1,4 +1,4 @@
-# helper funcitons
+# %% helper funcitons
 import os
 import pandas as pd
 import pickle as pkl
@@ -150,3 +150,18 @@ def send_simple_query(messages, response_schema):
     )
     return response.output_parsed
 
+import io
+
+def transcribe_voice(audio_bytes: bytes):
+    audio_buffer = io.BytesIO(audio_bytes)
+    audio_buffer.name = "audio.m4a"   # Whisper requires a filename
+
+    transcript = client.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_buffer,
+        language="en"
+    )
+
+    return transcript.text
+
+# %%
