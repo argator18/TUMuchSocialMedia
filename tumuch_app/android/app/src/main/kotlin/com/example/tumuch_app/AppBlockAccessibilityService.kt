@@ -1,10 +1,17 @@
 package com.example.tumuch_app   // <-- CHANGE to your real package
 
+import android.os.Handler
+import android.os.Looper
 import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 import android.content.Intent
 import android.content.Context
 import android.util.Log
+import android.view.accessibility.AccessibilityNodeInfo   // <- ADD THIS
+
+
+
+
 
 class AppBlockAccessibilityService : AccessibilityService() {
 
@@ -42,7 +49,24 @@ class AppBlockAccessibilityService : AccessibilityService() {
             return
         }
 
+        val root = rootInActiveWindow ?: return
         val now = System.currentTimeMillis()
+
+        if (event?.packageName?.toString() == "com.android.chrome" || event?.packageName?.toString() == "org.mozilla.firefox") {
+            val url = findUrlInTree(root)
+            if (url != null) {
+                Log.d("AppBlockService", "Aktuelle URL: $url")
+            }
+            if (!url.isNullOrEmpty() && url.contains("instagram", ignoreCase = true)) {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                handleInstagramForeground(now)
+            }
+
+        }
+        else{
+            Log.d(TAG, "Package: ${event?.packageName}")
+        }
+
 
         if (pkg == INSTAGRAM_PACKAGE) {
             handleInstagramForeground(now)
@@ -97,27 +121,52 @@ class AppBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun blockInstagram() {
-        // Go to home so IG loses focus
+        // 1) Go to home so IG loses focus
         performGlobalAction(GLOBAL_ACTION_HOME)
 
-        // Then open our Flutter app (MainActivity -> main.dart)
-        launchOurApp()
+        // 2) After a short delay, launch our Flutter app
+        Handler(Looper.getMainLooper()).postDelayed({
+            launchOurApp()
+        }, 300L) // 300 ms is usually enough; adjust if needed
     }
 
+    override fun onInterrupt() {
+        // No special cleanup
+    }
     private fun launchOurApp() {
         try {
-            // MainActivity is the default Flutter entry activity
             val intent = Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                // Kill any existing task for this app and start a new one
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TASK
+                )
+                putExtra("route", "/reason")
             }
+            Log.d(TAG, "launchOurApp: starting MainActivity with route=/reason (clear task)")
             startActivity(intent)
         } catch (e: Exception) {
             Log.e(TAG, "Error launching app: ${e.message}", e)
         }
     }
 
-    override fun onInterrupt() {
-        // No special cleanup
+
+    // test: check browser content:
+    private fun findUrlInTree(node: AccessibilityNodeInfo): String? {
+        val txt = node.text?.toString() ?: ""
+
+        if (txt.startsWith("http://") || txt.startsWith("https://")|| txt.endsWith(".com")|| txt.endsWith(".de")) {
+            return txt
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val res = findUrlInTree(child)
+            child.recycle()
+            if (res != null) return res
+        }
+        return null
     }
+
 }
 
