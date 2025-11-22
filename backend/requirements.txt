@@ -28,3 +28,4 @@ SQLAlchemy==2.0.0b3
 trio
 uvicorn
 openai
+pandas
