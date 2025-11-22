@@ -42,6 +42,7 @@ dev_dependencies:
   # add this:
   record: ^6.1.2
   path_provider: ^2.1.5   # or similar recent version
+  http: ^1.2.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
