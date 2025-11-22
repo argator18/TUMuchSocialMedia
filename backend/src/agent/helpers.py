@@ -14,6 +14,23 @@ class BouncerAnswerFormat(BaseModel):
     time: int
     reply: str
 
+class GoalFeedbackFormat(BaseModel):
+    # Is the user currently acting in line with the stated goal?
+    on_track: bool
+
+    # Short textual verdict, e.g. "You are still on track", "You drifted off into explore-feed"
+    verdict: str
+
+    # 1–100 score of how well current behavior matches the goal
+    score: int
+
+    # Short, actionable feedback (1–3 sentences)
+    feedback: str
+
+    # Optional suggestion for the *next* concrete action (e.g. "close app", "go back to DMs", etc.)
+    next_step: str
+
+
 # ===================================================================
 # Helper Funciton Simulating a Dtabase with .pkl's Funcionalities
 # ===================================================================
@@ -71,12 +88,12 @@ def update_user_preferences():
 # openai Stuff
 # ===================================================================
 
-def send_simple_query(messages, response_schema):
-    # simple message asking for allowance to use an app
-    response = client.responses.parse(
-        model="gpt-5-nano",
-        input=messages,
-        text_format=response_schema
-    )
 
+def send_simple_query(messages, response_schema):
+    response = client.responses.parse(
+        model="gpt-5.1-mini",   
+        input=messages,
+        response_format=response_schema,  
+    )
     return response.output_parsed
+
