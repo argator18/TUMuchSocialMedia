@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TUMuch Social Media</string>
+
+    <!-- optional: a more specific description for the accessibility service -->
+    <string name="accessibility_service_description">
+        Restricts Instagram usage to 30 minutes and redirects you back to the focus app.
+    </string>
+</resources>
+
