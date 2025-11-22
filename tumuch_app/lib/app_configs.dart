@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+const String API_BASE = "http://172.20.10.3:8000";
+
+
 // Die Hauptkonfigurationsseite für Limits und Ziele.
 class AppConfigs extends StatefulWidget {
   const AppConfigs({super.key});
