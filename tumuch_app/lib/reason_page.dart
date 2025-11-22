@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-// Import der LongTermGoalsPage wird nicht mehr benötigt, da die Navigation von außen erfolgt, 
-// aber wir lassen es drin, falls es woanders benötigt wird.
-import 'app_configs.dart'; 
+import 'home_page.dart'; // Import der HomePage
 
 class ReasonPage extends StatefulWidget {
   const ReasonPage({super.key});
@@ -19,6 +17,23 @@ class _ReasonPageState extends State<ReasonPage> {
 
   bool _isRecording = false;
   String? _audioPath;
+
+  // Optionen für das Dropdown-Menü (neu)
+  final List<String> _learnedReasons = [
+    'Gelernter Grund 1; 3 Minuten',
+    'Gelernter Grund 2; 1 Minute',
+    'Gelernter Grund 3; 30 Sekunden',
+  ];
+  
+  // Aktuell ausgewählter Wert
+  String? _selectedLearnedReason; 
+
+  @override
+  void initState() {
+    super.initState();
+    // Setze den initialen Wert auf den ersten Eintrag
+    _selectedLearnedReason = _learnedReasons.first;
+  }
 
   @override
   void dispose() {
@@ -35,15 +50,20 @@ class _ReasonPageState extends State<ReasonPage> {
         _isRecording = false;
         _audioPath = path;
       });
+      // Kurze Bestätigung anzeigen
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aufnahme beendet und gespeichert.'),
+          duration: Duration(seconds: 1),
+        ),
+      );
     } else {
       // Check & request permission
       final hasPermission = await _recorder.hasPermission();
       if (!hasPermission) {
-        // HINWEIS: Auf Android/iOS muss die Berechtigung in der Manifest/Info.plist 
-        // Datei konfiguriert werden, damit dies funktioniert.
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('No microphone permission.'),
+            content: Text('Keine Mikrofonberechtigung.'),
           ),
         );
         return;
@@ -60,13 +80,20 @@ class _ReasonPageState extends State<ReasonPage> {
           bitRate: 128000,
           sampleRate: 44100,
         ),
-        path: filePath, // <- satisfies "required named parameter 'path'"
+        path: filePath,
       );
 
       setState(() {
         _isRecording = true;
         _audioPath = null;
       });
+      // Visuelles Feedback für Start der Aufnahme
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aufnahme gestartet...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
     }
   }
 
@@ -74,11 +101,15 @@ class _ReasonPageState extends State<ReasonPage> {
     final textReason = _reasonController.text.trim();
     final hasText = textReason.isNotEmpty;
     final hasVoice = _audioPath != null;
+    
+    // Dropdown-Grund wird immer als ausgewählt betrachtet, da er einen Initialwert hat
+    final learnedReason = _selectedLearnedReason;
 
+    // Nur prüfen, ob das Textfeld leer ist UND keine Sprachaufnahme existiert.
     if (!hasText && !hasVoice) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please type a reason or record a voice message.'),
+          content: Text('Bitte geben Sie einen Grund ein, nehmen Sie eine Sprachnachricht auf oder wählen Sie einen gelernten Grund.'),
         ),
       );
       return;
@@ -87,20 +118,17 @@ class _ReasonPageState extends State<ReasonPage> {
     // Grund wurde erfasst (hier würden Sie ihn in der Datenbank speichern)
     debugPrint('Text reason: $textReason');
     debugPrint('Recorded audio path: $_audioPath');
+    debugPrint('Selected learned reason: $learnedReason');
 
-    // **AKTUALISIERT:** Zeige eine Bestätigung an und gehe zurück, 
-    // da dies nun das Ende des initialen Eingabeflusses ist.
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Grund erfasst! Sie können jetzt zum Hauptmenü fortfahren.'),
-        duration: Duration(seconds: 2),
+        content: Text('Grund erfasst! Sie werden zum Haupt-Dashboard weitergeleitet.'),
+        duration: Duration(seconds: 1),
       ),
     );
     
-    // Nach kurzem Warten (damit der Benutzer die Meldung sieht) zur vorherigen Seite zurückkehren.
-    Future.delayed(const Duration(milliseconds: 500), () {
-        Navigator.pop(context); 
-    });
+    // Navigiere zum Home-Dashboard und ersetze den Navigationsstapel.
+    Navigator.pushReplacementNamed(context, '/home'); 
   }
 
   @override
@@ -109,7 +137,7 @@ class _ReasonPageState extends State<ReasonPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mein Grund'), // Titel aktualisiert
+        title: const Text('Mein Grund'), 
         backgroundColor: colorScheme.inversePrimary,
       ),
       body: SafeArea(
@@ -119,29 +147,55 @@ class _ReasonPageState extends State<ReasonPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Why do you want to use this app?',
+                'Warum möchten Sie Ihre Social Media-Nutzung reduzieren?',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
               Text(
-                'You can either type your reason or record a short voice message.',
+                'Notieren Sie Ihren Grund, sprechen Sie ihn ein oder wählen Sie einen gelernten Grund aus.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 24),
 
-              TextField(
-                controller: _reasonController,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Type your reason',
-                  alignLabelWithHint: true,
-                  border: OutlineInputBorder(),
-                  hintText: 'e.g. I want to focus better, track my usage, ...',
-                ),
+              // NEUE ZEILE: Textfeld und Dropdown in einer Row
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _reasonController,
+                      maxLines: 1, // Reduziert auf eine Zeile (neu)
+                      decoration: const InputDecoration(
+                        labelText: 'Grund eingeben',
+                        border: OutlineInputBorder(),
+                        hintText: 'z.B. Mehr Fokus, mehr Zeit für Hobbys',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  
+                  // NEU: Dropdown-Menü
+                  DropdownButton<String>(
+                    value: _selectedLearnedReason,
+                    items: _learnedReasons.map((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value, style: const TextStyle(fontSize: 14)),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        _selectedLearnedReason = newValue;
+                      });
+                    },
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  ),
+                ],
               ),
-
+              
               const SizedBox(height: 16),
 
+              // Visuelle Trennlinie
               Row(
                 children: [
                   Expanded(
@@ -149,7 +203,7 @@ class _ReasonPageState extends State<ReasonPage> {
                   ),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text('or'),
+                    child: Text('oder'),
                   ),
                   Expanded(
                     child: Divider(color: Colors.grey.shade400),
@@ -158,27 +212,14 @@ class _ReasonPageState extends State<ReasonPage> {
               ),
 
               const SizedBox(height: 16),
-
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: _toggleRecording,
-                    icon: Icon(_isRecording ? Icons.stop : Icons.mic),
-                    label:
-                        Text(_isRecording ? 'Stop recording' : 'Record voice'),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      _isRecording
-                          ? 'Recording...'
-                          : (_audioPath != null
-                              ? 'Recorded file: $_audioPath'
-                              : 'No voice message recorded'),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+              
+              // Anzeige für aufgenommene Datei
+              Text(
+                _audioPath != null
+                    ? 'Gespeicherte Aufnahme: ${File(_audioPath!).uri.pathSegments.last}'
+                    : 'Es wurde noch keine Sprachaufnahme erstellt.',
+                style: TextStyle(fontStyle: _audioPath != null ? FontStyle.normal : FontStyle.italic),
+                overflow: TextOverflow.ellipsis,
               ),
 
               const Spacer(),
@@ -187,11 +228,24 @@ class _ReasonPageState extends State<ReasonPage> {
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: _submit,
-                  child: const Text('Confirm and finish'), // Text aktualisiert
+                  child: const Text('Bestätigen und abschließen'),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+      // NEU: Floating Action Button in der Mitte unten
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _toggleRecording,
+        backgroundColor: _isRecording ? Colors.red.shade600 : colorScheme.primary,
+        tooltip: _isRecording ? 'Aufnahme stoppen' : 'Sprachaufnahme starten',
+        elevation: 4,
+        child: Icon(
+          _isRecording ? Icons.stop : Icons.mic, 
+          size: 32,
+          color: Colors.white,
         ),
       ),
     );

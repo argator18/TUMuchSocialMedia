@@ -43,10 +43,15 @@ class MyApp extends StatelessWidget {
 
       /// Alle benutzten Routen HIER definieren:
       routes: {
+<<<<<<< HEAD
         '/': (_) => const HomePage(),          // deine Hauptseite
         '/home': (_) => const HomePage(),      // Alias, falls du '/home' nutzt
         '/reason': (_) => const ReasonPage(),  // Seite nach Instagram-Block
         '/goals': (_) => const AppConfigs(),   // Ziel-/Limit-Seite
+=======
+        '/goals': (context) => const AppConfigs(), // goals bleibt als Route, falls benötigt
+        '/reason': (context) => const ReasonPage(),
+>>>>>>> da79e7431de9166243ae21def1aaeda909d976ce
       },
     );
   }

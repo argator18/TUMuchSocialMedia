@@ -207,6 +207,15 @@ class HomePage extends StatelessWidget {
               routeName: '/goals',
             ),
             
+            // Navigator-Karte für den Motivationsgrund (ReasonPage) - WIEDER HINZUGEFÜGT
+            _buildNavigationCard(
+              title: 'Motivationsgrund ändern',
+              subtitle: 'Ihre Begründung für die App-Nutzung bearbeiten (Text/Sprache/Lern-Grund).',
+              icon: Icons.campaign,
+              color: Theme.of(context).colorScheme.secondary,
+              routeName: '/reason',
+            ),
+            
           ],
         ),
       ),
