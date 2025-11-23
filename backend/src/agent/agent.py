@@ -5,6 +5,9 @@ import asyncio
 from .helpers import *
 from .prompts import *
 
+def parse_usage(usage, apps):
+    print(usage)
+
 # ==================================
 #           Agents
 # ==================================
@@ -18,9 +21,11 @@ async def ask_for_app_permission(user_id: str, query: str, app_usage):
     # for testing
     #user_preferences = "The user asking is Tim. He is very ambitionate and in his exam period and want you to be very strict with him"
     user_name = get_name(user_id)
-    user_pref, user_fav_personality = get_user_preferences(user_id)
+    user_pref, user_fav_personality, apps = get_user_preferences(user_id)
 
     PERSONALITY_PROMPT = PERSONALITY_MAP[user_fav_personality]
+
+    parsed_usage = parse_usage(app_usage, apps)
 
     user_log = get_user_log(user_id, time_delay=24)
 
