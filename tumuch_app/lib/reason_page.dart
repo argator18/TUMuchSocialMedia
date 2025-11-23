@@ -43,6 +43,20 @@ class _ReasonPageState extends State<ReasonPage> {
   int? _allowedMinutes;
   String? _replyMessage;
 
+  /// Remove heavy/icon fields from usage list before sending to backend.
+  List<dynamic> _stripIconsFromUsage(List<dynamic> usage) {
+    return usage.map((entry) {
+      if (entry is Map) {
+        // create a copy so we don't mutate the original list
+        final copy = Map.of(entry);
+        copy.remove('iconBase64');
+        return copy;
+      }
+      return entry;
+    }).toList();
+  }
+
+
   @override
   void initState() {
     super.initState();
@@ -85,7 +99,8 @@ class _ReasonPageState extends State<ReasonPage> {
       });
 
       // 🔹 Usage from native side
-      final usage = await UsageService.getUsageSummary();
+      final usageRaw = await UsageService.getUsageSummary();
+      final usage = _stripIconsFromUsage(usageRaw);
 
       // 🔹 Load user_id from storage
       final prefs = await AppPrefs.getInstance();
@@ -176,7 +191,8 @@ class _ReasonPageState extends State<ReasonPage> {
       });
 
       // 🔹 Usage from native side
-      final usage = await UsageService.getUsageSummary();
+      final usageRaw = await UsageService.getUsageSummary();
+      final usage = _stripIconsFromUsage(usageRaw);
 
       // 🔹 Load user_id from storage
       final prefs = await AppPrefs.getInstance();
