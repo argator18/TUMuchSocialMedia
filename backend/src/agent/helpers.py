@@ -1,10 +1,11 @@
-# helper funcitons
+# %% helper funcitons
 import os
 import pandas as pd
 import pickle as pkl
 import openai
 from pydantic import BaseModel
 from pathlib import Path
+from datetime import datetime, timedelta
 
 client = openai.OpenAI()
 
@@ -42,11 +43,13 @@ BASE_DIR = Path(__file__).resolve().parent
 # load local .pkl's simulating database
 preferences_path = BASE_DIR / "user_preferences.pkl"
 users_path = BASE_DIR / "users.pkl"
+log_path = BASE_DIR / "log.pkl"
 
 preferences_df = pd.read_pickle(preferences_path)
 users_df = pd.read_pickle(users_path)
+log_df = pd.read_pickle(log_path)
 
-# getter
+# getter >>>>>>>>>>>>>>>>>>>>>>>>>>
 
 def get_user_preferences(user_id):
     # Filter entries for this user
@@ -74,14 +77,64 @@ def get_name(id):
 
     return user_entry["name"]
 
+def get_user_log(user_id: str, time_delay: int):
+    # the previous user requests and answers from the user to the agent
+    # All request during the last *time_delay** hours (should be positve int)
 
-# setter
+    # Convert negative or 0 time_delay to valid values
+    if time_delay <= 0:
+        raise ValueError("time_delay must be a positive integer")
+
+    # Compute time window
+    cutoff = datetime.now() - timedelta(hours=time_delay)
+
+    # Filter logs
+    filtered_df = log_df[
+        (log_df['user_id'] == user_id) &
+        (log_df['date_time'] >= cutoff)
+    ].sort_values(by="date_time")
+
+    if filtered_df.empty:
+        return f"Empty log - The user has not asked for anything in the last {time_delay} hours"
+    else:
+        return filtered_df.to_csv(index=False)
+
+
+
+
+
+# setter >>>>>>>>>>>>>>>>>>
+def update_log(user_id, query, answer):
+    global log_df
+    # Create timestamp (seconds only)
+    date_time = datetime.now().replace(microsecond=0)
+
+    # Create a new row as a DataFrame for safe concatenation
+    new_entry = pd.DataFrame([{
+        "user_id": user_id,
+        "query": query,
+        "answer": answer,
+        "date_time": date_time,
+    }])
+
+    # Append using concat (recommended; .append() is deprecated)
+    log_df = pd.concat([log_df, new_entry], ignore_index=True)
+
+    log_df.to_pickle(log_path)
 
 def add_user():
     pass
 
 def update_user_preferences():
     pass
+
+def delete_user_logs(user_id):
+    global log_df
+    
+    # Keep only rows where user_id does NOT match
+    log_df = log_df[log_df['user_id'] != user_id].reset_index(drop=True)
+
+    log_df.to_pickle(log_path)
 
 
 # ===================================================================
@@ -91,9 +144,24 @@ def update_user_preferences():
 
 def send_simple_query(messages, response_schema):
     response = client.responses.parse(
-        model="gpt-5.1-mini",   
+        model="gpt-5.1",   
         input=messages,
-        response_format=response_schema,  
+        text_format=response_schema, 
     )
     return response.output_parsed
 
+import io
+
+def transcribe_voice(audio_bytes: bytes):
+    audio_buffer = io.BytesIO(audio_bytes)
+    audio_buffer.name = "audio.m4a"   # Whisper requires a filename
+
+    transcript = client.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_buffer,
+        language="en"
+    )
+
+    return transcript.text
+
+# %%
