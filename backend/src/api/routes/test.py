@@ -33,7 +33,7 @@ class SuperviseInput(BaseModel):
 async def echo(msg: BaseMessage):
     agent_reply = await agent.ask_for_app_permission(
         user_id=msg.user_id,
-        msg.text,
+        query=msg.text,
         app_usage=msg.usage
     )
 
@@ -54,23 +54,37 @@ async def onboard(payload: OnboardInput):
 
     
 
+
 @router.post("/voice")
 async def voice(
     file: UploadFile = File(...),
+    user_id: str = Form(...),
+    usage: str = Form(None),  # JSON string, optional
 ):
+    # ---- Read audio ----
     audio_bytes = await file.read()
     text = agent.transcribe_voice(audio_bytes)
 
+    # ---- Parse usage JSON if provided ----
+    usage_list = []
+    if usage:
+        try:
+            parsed = json.loads(usage)
+            usage_list = [UsageItem(**item) for item in parsed]
+        except Exception as e:
+            print("Usage parsing error:", e)
+
+    # ---- Call your agent ----
     agent_reply = await agent.ask_for_app_permission(
-        "682596a5-7863-4419-9138-5f52c2779e61",
-        text,
+        user_id=user_id,
+        query=text,
+        app_usage=usage_list
     )
 
     return JSONResponse(
         status_code=200,
         content=agent_reply.dict(),
-    )
-    
+    )    
 
 @router.post("/supervise")
 async def supervise(payload: SuperviseInput):
