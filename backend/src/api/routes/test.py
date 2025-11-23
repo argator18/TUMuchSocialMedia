@@ -10,6 +10,7 @@ import src.agent.supervisor as supervisor
 
 router = APIRouter()
 
+class UserId
 
 class UsageItem(BaseModel):
     packageName: str
@@ -43,7 +44,12 @@ async def echo(msg: BaseMessage):
         status_code=200,
         content=agent_reply.dict(),
     )
-    
+
+@router.get("/todays_count")
+async def todays_count(user_id: str):
+    n = agent.get_request_number(user_id)
+
+    return {"daily_count": n}
     
 @router.post("/onboard")
 async def onboard(payload: OnboardInput):
