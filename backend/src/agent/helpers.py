@@ -303,32 +303,12 @@ def transcribe_voice(audio_bytes: bytes):
 
     return transcript.text
 
-def ask_with_image():
-
-
-    # Path to your image
-    image_path = "path_to_your_image.jpg"
-
-    # Getting the Base64 string
-    base64_image = encode_image(image_path)
-
-
+def ask_with_image(messages):
     response = client.responses.create(
-        model="gpt-4.1",
-        input=[
-            {
-                "role": "user",
-                "content": [
-                    { "type": "input_text", "text": "what's in this image?" },
-                    {
-                        "type": "input_image",
-                        "image_url": f"data:image/jpeg;base64,{base64_image}",
-                    },
-                ],
-            }
-        ],
+        model="gpt-5-mini",
+        input=messages
     )
 
-    print(response.output_text)
+    return response
 
     # %%

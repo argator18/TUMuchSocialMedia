@@ -37,6 +37,9 @@ def parse_usage(usage_list, tracked_apps):
             f"App: {app} - used time: {minutes} min"
         )
 
+    print("lines: ", lines)
+    print("filtered", filtered)
+
     # STEP 3 — Final output
     if not lines:
         return "No usage found for tracked apps."
@@ -72,7 +75,7 @@ async def ask_for_app_permission(user_id: str, query: str, app_usage):
     context = f"""
     CONTEXT:
 
-    current time: {time}
+    current time: {time} in european stadat
 
     The users name is: {user_name}
 
