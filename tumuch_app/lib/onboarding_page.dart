@@ -185,7 +185,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           children: <Widget>[
               // Dein Logo-Widget ist hier korrekt eingebunden
             SvgPicture.asset(
-              'images/tumuch_logo.svg', // <-- Dateipfad deines SVGs
+              'assets/images/tumuch_logo.svg', // <-- Dateipfad deines SVGs
               width: 100, 
               height: 100,
               // Da SVGs Vektoren sind, sind sie automatisch scharf.
