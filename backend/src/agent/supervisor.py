@@ -4,7 +4,6 @@ from .prompts import *
 
 async def check_goal_follow_through(
     user_id: str,
-    goal: str,
     logs,
     screenshot_b64: str | None = None,
 ):
@@ -16,9 +15,11 @@ async def check_goal_follow_through(
     """
 
     user_name = get_name(user_id)
-    user_pref, user_fav_personality = get_user_preferences(user_id)
-    PERSONALITY_PROMPT = PERSONALITY_MAP.get(user_fav_personality, "")
 
+    user_pref, _, _ = get_user_preferences(user_id)
+
+    # TODO users last request
+    
     # Logs schön als Text
     if isinstance(logs, str):
         logs_text = logs
@@ -26,13 +27,12 @@ async def check_goal_follow_through(
         logs_text = "\n".join([str(entry) for entry in logs])
 
     context_text = f"""
-CONTEXT:
-- User name: {user_name}
-- GOAL: {goal}
+    CONTEXT:
+    - User name: {user_name}
 
-LOGS (most recent last):
-{logs_text}
-"""
+    LOGS (most recent last):
+    {logs_text}
+    """
 
     # ==============================
     #   Build multi-modal "input"
@@ -43,9 +43,6 @@ LOGS (most recent last):
         {"type": "input_text", "text": GATEKEEPER_SYSTEM_PROMPT},
         {"type": "input_text", "text": GOAL_COACH_SYSTEM_PROMPT},
     ]
-
-    if PERSONALITY_PROMPT:
-        system_content.append({"type": "input_text", "text": PERSONALITY_PROMPT})
 
     if user_pref:
         system_content.append({"type": "input_text", "text": user_pref})
@@ -90,7 +87,7 @@ LOGS (most recent last):
     # ==============================
 
     response = client.responses.parse(
-        model="gpt-5.1",                 # <--- hier dein Vision-Modell
+        model="gpt-5-nano",                 # <--- hier dein Vision-Modell
         input=vision_input,
         text_format=GoalFeedbackFormat,  # Pydantic Schema
     )

@@ -35,6 +35,7 @@ dependencies:
   flutter_svg: ^2.0.11+1
   shared_preferences: ^2.2.0  # or current latest
 
+  flutter_launcher_icons: "^0.13.1"
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -98,3 +99,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  android: true                          # Erstellt Icons für Android
+  ios: true                              # Erstellt Icons für iOS
+  image_path: "assets/images/app_icon.png" # DER PFAD ZU DEINEM LOGO
+  min_sdk_android: 21                    # Minimale Android-Version (Standard)
