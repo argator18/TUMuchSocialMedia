@@ -52,7 +52,7 @@ async def check_goal_follow_through(
             "content": context_text
         },
         {
-            "role": "Does the provided logs",
+            "role": "user",
             "content": [
                 { "type": "input_text", "text": "what's in this image?" },
                 {
@@ -67,5 +67,5 @@ async def check_goal_follow_through(
 
     print(response)
 
-    return response.output_parsed
+    return response
 
