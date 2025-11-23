@@ -48,7 +48,7 @@ async def check_goal_follow_through(
             "content": GOAL_COACH_SYSTEM_PROMPT
         },
         {
-            "role": "system", 
+            "role": "user", 
             "content": context_text
         },
         {
