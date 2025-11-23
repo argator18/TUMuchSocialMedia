@@ -193,7 +193,8 @@ def add_user(onboarding_config):
     users_df.to_pickle(users_path)
 
     # Now the preferences:
-    apps = str(onboarding_config['apps']).strip("[]")
+    apps_list = onboarding_config['apps']
+    apps = str(apps_list).strip("[]")
     morning_factor = onboarding_config['morning_factor']
     worktime_factor = onboarding_config['worktime_factor']
     evening_factor = onboarding_config['evening_factor']
@@ -224,7 +225,8 @@ def add_user(onboarding_config):
         "date_time": date_time,
         "user_id": id,
         "preference": preference,
-        "preferred_personality": personality
+        "preferred_personality": personality,
+        "selected_apps": apps_list
     }])
 
     # append to the pkl
