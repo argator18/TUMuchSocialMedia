@@ -5,7 +5,7 @@ from .prompts import *
 async def check_goal_follow_through(
     user_id: str,
     handy_logs,
-    screenshot_b64: str | None = None,
+    screenshot_b64: bytes | None = None,
 ):
     """
     Check whether current app behavior matches the given GOAL.

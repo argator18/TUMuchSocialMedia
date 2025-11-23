@@ -98,18 +98,40 @@ async def voice(
 async def supervise(payload: SuperviseInput):
 
     image_bytes = None
-    if payload.image:
-        b64 = payload.image
-        image_bytes = base64.b64decode(b64)
 
-    # convert the structured events into something your supervisor expects
+    # ---- Save the image if provided ----
+    if payload.image:
+        try:
+            # decode base64
+            image_bytes = base64.b64decode(payload.image)
+
+            # generate file name
+            file_name = f"img.png"
+
+            # ensure directory exists
+            import os
+            os.makedirs("./supervise_images", exist_ok=True)
+
+            # write file
+            with open(file_name, "wb") as f:
+                f.write(image_bytes)
+
+            print("Saved screenshot to:", file_name)
+
+        except Exception as e:
+            print("Image save error:", e)
+
+    # ---- Convert events to JSON string ----
     text_for_supervisor = json.dumps(payload.text)
 
+    # ---- Call your supervisor logic ----
     agent_reply = await supervisor.check_goal_follow_through(
         "682596a5-7863-4419-9138-5f52c2779e61",
         text_for_supervisor,
-        image_bytes,
+        image_bytes           # still pass bytes if needed
     )
 
-    return JSONResponse(status_code=200, content=agent_reply.dict(),)
-
+    return JSONResponse(
+        status_code=200,
+        content=agent_reply.dict()
+    )
