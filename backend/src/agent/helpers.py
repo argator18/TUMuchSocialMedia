@@ -239,11 +239,7 @@ def add_user(onboarding_config):
 
     {timing_preference}
 
-    each number is between 1 and 10. 
-    10 means at this time you are ought to be very strict during that time period. 
-    1 means you do not restrict the user at all. 
-    5 means you can be convinced if you think the reason is deliberate and useful, and even for rare occasions you also allow doom scrolling.     
-    
+
     """
 
     personality = "chill"

@@ -27,7 +27,7 @@ class OnboardInput(BaseModel):
 
 
 class SuperviseInput(BaseModel):
-    logs: list[dict]  # or list[ContextEvent]
+    body: list[dict]  # or list[ContextEvent]
     image: str | None = None
     
 
@@ -103,7 +103,7 @@ async def supervise(payload: SuperviseInput):
         image_bytes = base64.b64decode(b64)
 
     # convert the structured events into something your supervisor expects
-    text_for_supervisor = json.dumps(payload.logs)
+    text_for_supervisor = json.dumps(payload.body)
 
     agent_reply = await supervisor.check_goal_follow_through(
         "682596a5-7863-4419-9138-5f52c2779e61",
