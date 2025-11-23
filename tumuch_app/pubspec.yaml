@@ -103,5 +103,5 @@ flutter:
 flutter_launcher_icons:
   android: true                          # Erstellt Icons für Android
   ios: true                              # Erstellt Icons für iOS
-  image_path: "assets/images/app_icon.png" # DER PFAD ZU DEINEM LOGO
+  image_path: "assets/images/app_icon_2.png" # DER PFAD ZU DEINEM LOGO
   min_sdk_android: 21                    # Minimale Android-Version (Standard)
