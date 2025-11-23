@@ -57,7 +57,7 @@ async def check_goal_follow_through(
                 { "type": "input_text", "text": "what's in this image?" },
                 {
                     "type": "input_image",
-                    "image_url": f"data:image/jpeg;base64,{screenshot_b64}",
+                    "image_url": f"data:image/png;base64,{screenshot_b64}",
                 }
             ]
         }
