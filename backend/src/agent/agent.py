@@ -71,6 +71,23 @@ async def ask_for_app_permission(user_id: str, query: str, app_usage):
 
     time = datetime.now().strftime("%H:%M")
 
+    # =========== Hardcode part ==================
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    hardcoded_event = {
+        "lecture": "Final Pitch - Reply (Garching, TUM) - Important!",
+        "date": today,
+        "start": "11:00",
+        "end": "13:00",
+    }
+
+    todays_events = [hardcoded_event]
+    # ################### end hardcoded part ############
+
+    # Convert single event to string
+    todays_events_strings = [f"{ev['date']} | {ev['start']}-{ev['end']} | Name: {ev['lecture']}" for ev in todays_events]
+    events_str = "\n\n".join(todays_events_strings)
+
     # TODO add here user app usage statistics
     context = f"""
     CONTEXT:
@@ -80,12 +97,13 @@ async def ask_for_app_permission(user_id: str, query: str, app_usage):
     The users name is: {user_name}
 
     The user has the following history of asking for allowance for the day:     
-
     {user_log} 
 
     The user has the following app usage times for today for the apps in his preferences
-
     {parsed_usage}
+
+    The user has for today the following events planned:
+    {events_str}
 
     """
 

@@ -5,6 +5,7 @@ from .helpers import *
 from .prompts import *
 
 def encode_image(image_path):
+    
     if not os.path.isfile(image_path):
         raise RuntimeError("Not an Image")
 
