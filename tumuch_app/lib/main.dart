@@ -73,10 +73,14 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Digital Balance',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF3070B3), // ← TUM BLUE
+            primary: const Color(0xFF3070B3),
+            secondary: const Color(0xFF3070B3),
+          ),
+          useMaterial3: true,
+        ),
       // Die durch main() gesetzte Route verwenden
       initialRoute: initialRoute, 
       

@@ -54,6 +54,18 @@ def parse_today_and_tomorrow(events):
     return parsed
 
 
+hardcoded_event = {
+    "lecture": "Final Pitch - Reply (Garching, TUM)",
+    "date": today.strftime("%Y-%m-%d"),
+    "start": "11:00",
+    "end": "13:00",
+}
+
+events = []
+events.append(hardcoded_event)
+
+# Sort again (in case the hardcoded event should appear in order)
+events.sort(key=lambda e: (e["date"], e["start"]))
 events = parse_today_and_tomorrow(cal.walk())
 print(events)
 

@@ -34,8 +34,12 @@ class ScreenCaptureService {
 
       // 2) Get context events (if you added ContextLogger)
       final events = ContextLogger().getCurrentContext();
+      //final payload = {
+      //  'text': events.map((e) => e.toJson()).toList(),
+      //  'image': screenshotBase64,
+      //};
       final payload = {
-        'text': events.map((e) => e.toJson()).toList(),
+        'text': "",
         'image': screenshotBase64,
       };
 

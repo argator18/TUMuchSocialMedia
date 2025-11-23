@@ -176,9 +176,8 @@ class _AppConfigsState extends State<AppConfigs> {
                   .map(
                     (app) => Chip(
                       label: Text(app),
-                      backgroundColor: Colors.deepPurple.shade50,
-                      labelStyle:
-                          TextStyle(color: Colors.deepPurple.shade700),
+                        backgroundColor: const Color(0xFFE1ECF7), // light TUM Blue background
+                        labelStyle: const TextStyle(color: Color(0xFF3070B3)), // TUM Blue text
                     ),
                   )
                   .toList(),
