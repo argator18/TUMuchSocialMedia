@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import src.agent.agent as agent
 import src.agent.supervisor as supervisor
-import src.utilities.parse_tum_cal as calendar
+#import src.utilities.parse_tum_cal as calendar_tum
 
 router = APIRouter()
 
@@ -39,7 +39,7 @@ async def echo(msg: BaseMessage):
         user_id=msg.user_id,
         query=msg.text,
         app_usage=msg.usage,
-        #calender_events=[calendar.hardcoded_event] incoming events # Hardcorded calendar
+        #calendar_tum=[calendar.hardcoded_event] incoming events # Hardcorded calendar
     )
 
     return JSONResponse(
