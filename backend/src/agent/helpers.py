@@ -103,6 +103,23 @@ def get_user_log(user_id: str, time_delay: int):
         return filtered_df.to_csv(index=False)
 
 
+def get_request_number(user_id):
+    # Ensure your column is datetime type
+    log_df['date_time'] = pd.to_datetime(log_df['date_time'])
+
+    # Today's date
+    today = datetime.today().date()
+
+    # Filter rows
+    user_id_to_filter = "some_user_id"
+
+    filtered_df = log_df[
+        (log_df['user_id'] == user_id_to_filter) &
+        (log_df['date_time'].dt.date == today)
+    ]
+
+    return len(filtered_df)
+
 
 
 

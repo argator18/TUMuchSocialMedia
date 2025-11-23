@@ -5,8 +5,44 @@ import asyncio
 from .helpers import *
 from .prompts import *
 
-def parse_usage(usage, apps):
-    print(usage)
+def parse_usage(usage_list, tracked_apps):
+    """
+    usage_list: list of dicts from Android (packageName, totalTimeForeground, lastTimeUsed)
+    tracked_apps: list of lowercase app names you care about,
+                  e.g. ["instagram", "tiktok", "youtube"]
+    """
+
+    tracked_apps = [a.lower() for a in tracked_apps]
+
+
+
+    # STEP 1 — Filter packages
+    filtered = []
+    for item in usage_list:
+        pkg = item.get("packageName", "").lower()
+
+        # keep package if one of your app names appears in the packageName
+        for app in tracked_apps:
+            if app in pkg:
+                filtered.append(
+                    {"app": app, "minutes": item.get("totalMinutes")}
+                )
+
+    lines = []
+    for item in filtered:
+        app = item["app"]
+        minutes = item.get("minutes", 0)
+
+        lines.append(
+            f"App: {app} - used time: {minutes} min"
+        )
+
+    # STEP 3 — Final output
+    if not lines:
+        return "No usage found for tracked apps."
+
+    return "\n".join(lines)
+
 
 # ==================================
 #           Agents
@@ -26,18 +62,27 @@ async def ask_for_app_permission(user_id: str, query: str, app_usage):
     PERSONALITY_PROMPT = PERSONALITY_MAP[user_fav_personality]
 
     parsed_usage = parse_usage(app_usage, apps)
+    # TODO add a database for this
 
     user_log = get_user_log(user_id, time_delay=24)
+
+    time = datetime.now().strftime("%H:%M")
 
     # TODO add here user app usage statistics
     context = f"""
     CONTEXT:
+
+    current time: {time}
 
     The users name is: {user_name}
 
     The user has the following history of asking for allowance for the day:     
 
     {user_log} 
+
+    The user has the following app usage times for today for the apps in his preferences
+
+    {parsed_usage}
 
     """
 
@@ -81,7 +126,7 @@ def main():
     #query = "I just scrolled for 10 minuts and would like some more"
     query = input("Type the query: ")
 
-    answer = asyncio.run(ask_for_app_permission(donatello, query))
+    answer = asyncio.run(ask_for_app_permission(donatello, query, []))
     print(answer)
 
 if __name__ == "__main__":
