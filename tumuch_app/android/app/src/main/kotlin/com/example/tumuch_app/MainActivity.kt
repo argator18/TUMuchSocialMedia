@@ -29,6 +29,11 @@ import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.util.Base64
 import java.io.ByteArrayOutputStream
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
 
 
 class MainActivity : FlutterActivity() {
@@ -91,6 +96,23 @@ class MainActivity : FlutterActivity() {
                 "openAccessibilitySettings" -> {
                     openAccessibilitySettings(this)
                     result.success(null)
+                }
+
+                "getDailyUsageHistory" -> {
+                    if (!hasUsageStatsPermission(this)) {
+                        result.error("NO_PERMISSION", "Usage access not granted", null)
+                    } else {
+                        try {
+                            // List of human-readable app names from Flutter
+                            val selectedNames: List<String> =
+                                call.argument<List<String>>("apps") ?: emptyList()
+                            val json = getDailyUsageHistoryJson(this, selectedNames)
+                            result.success(json)
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "getDailyUsageHistory error", e)
+                            result.error("USAGE_ERROR", e.message, null)
+                        }
+                    }
                 }
 
 
@@ -222,6 +244,93 @@ class MainActivity : FlutterActivity() {
 
         return sorted.toString()
     }
+
+
+    /**
+     * Daily usage for the last N days as JSON array.
+     * Only counts apps whose *label* is contained in selectedAppNames
+     * (unless selectedAppNames is empty -> then we count all apps).
+     *
+     * [
+     *   { "date": "2025-10-01", "totalMinutes": 123 },
+     *   ...
+     * ]
+     */
+    private fun getDailyUsageHistoryJson(
+        context: Context,
+        selectedAppNames: List<String>
+    ): String {
+        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val pm = context.packageManager
+
+        val daysBack = 180 // last 180 days
+        val dayMillis = 24L * 60L * 60L * 1000L
+
+        // Today at local midnight
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = System.currentTimeMillis()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val todayMidnight = cal.timeInMillis
+
+        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        val arr = JSONArray()
+
+        // Cache packageName -> appLabel to avoid repeated PM lookups
+        val labelCache = mutableMapOf<String, String?>()
+
+        fun getAppLabel(pkg: String): String? {
+            return labelCache.getOrPut(pkg) {
+                try {
+                    val appInfo = pm.getApplicationInfo(pkg, 0)
+                    pm.getApplicationLabel(appInfo).toString()
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        }
+
+        val filterByNames = selectedAppNames.isNotEmpty()
+
+        // Oldest -> newest
+        for (i in daysBack downTo 1) {
+            val dayStart = todayMidnight - i * dayMillis
+            val dayEnd = dayStart + dayMillis
+
+            val stats = usm.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                dayStart,
+                dayEnd
+            ) ?: emptyList()
+
+            var totalMs = 0L
+
+            for (s in stats) {
+                val pkg = s.packageName ?: continue
+
+                if (filterByNames) {
+                    val label = getAppLabel(pkg) ?: continue
+                    if (!selectedAppNames.contains(label)) {
+                        // Skip apps not selected in settings
+                        continue
+                    }
+                }
+
+                totalMs += s.totalTimeInForeground
+            }
+
+            val minutes = (totalMs / 60000L).toInt()
+            val obj = JSONObject()
+            obj.put("date", dateFormat.format(java.util.Date(dayStart)))
+            obj.put("totalMinutes", minutes)
+            arr.put(obj)
+        }
+
+        return arr.toString()
+    }
+
     // ---------------- SCREEN CAPTURE LOGIC ----------------
 
     private fun startScreenCapture(result: MethodChannel.Result) {

@@ -1,5 +1,4 @@
 import 'dart:math';
-
 import 'package:flutter/material.dart';
 
 import 'usage_service.dart';
@@ -9,25 +8,7 @@ class HomePage extends StatelessWidget {
 
   static const int maxHealthyMinutes = 120;
 
-  // Fake 30-day history from current 24h usage (until we have real history).
-  List<int> _deriveDailyMinutesFromUsage(List<dynamic> usage) {
-    final apps = usage
-        .whereType<Map>()
-        .map((m) => m.map((k, v) => MapEntry(k.toString(), v)))
-        .toList();
-
-    final totalMinutesToday = apps.fold<int>(
-      0,
-      (sum, app) => sum + (app['totalMinutes'] as num? ?? 0).toInt(),
-    );
-
-    final rand = Random();
-    return List.generate(30, (i) {
-      final factor = 0.6 + rand.nextDouble() * 0.8; // 0.6–1.4
-      return max(0, (totalMinutesToday * factor).round());
-    });
-  }
-
+  // Map/minutes → score 0..100
   List<int> _minutesToScores(List<int> minutes) {
     return minutes
         .map((m) =>
@@ -51,6 +32,22 @@ class HomePage extends StatelessWidget {
     if (t < 0.75) return Colors.green.shade500;
     return Colors.green.shade800;
   }
+
+  static const _monthNames = [
+    '', // dummy for 0
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
 
   Widget _buildNavigationCard({
     required BuildContext context,
@@ -111,8 +108,8 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: FutureBuilder<List<dynamic>>(
-          future: UsageService.getUsageSummary(),
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: UsageService.getDailyUsageHistory(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -127,12 +124,36 @@ class HomePage extends StatelessWidget {
               );
             }
 
-            final usage = snapshot.data ?? [];
-            final last30Minutes = _deriveDailyMinutesFromUsage(usage);
-            final last10Minutes = last30Minutes.length <= 10
-                ? last30Minutes
-                : last30Minutes.sublist(last30Minutes.length - 10);
+            final raw = snapshot.data ?? [];
 
+            // Parse into _DayUsage, sort by date
+            final history = raw
+                .map((m) {
+                  final dateStr = m['date'] as String?;
+                  final minutes = (m['totalMinutes'] as num? ?? 0).toInt();
+                  if (dateStr == null) return null;
+                  final date = DateTime.parse(dateStr); // yyyy-MM-dd
+                  return _DayUsage(date, minutes);
+                })
+                .whereType<_DayUsage>()
+                .toList()
+              ..sort((a, b) => a.date.compareTo(b.date));
+
+            if (history.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No history yet – use your phone normally for a few days.',
+                  textAlign: TextAlign.center,
+                ),
+              );
+            }
+
+            // --- Naughty Score from last 10 days ---
+            final last10 = history.length <= 10
+                ? history
+                : history.sublist(history.length - 10);
+            final last10Minutes =
+                last10.map((d) => d.minutes).toList(growable: false);
             final last10Scores = _minutesToScores(last10Minutes);
             final averageScore = last10Scores.isEmpty
                 ? 0.0
@@ -144,16 +165,15 @@ class HomePage extends StatelessWidget {
             final maxMinutesForBars = last10Minutes.isEmpty
                 ? 0
                 : last10Minutes.reduce(max);
-            final maxMinutesHeatmap = last30Minutes.isEmpty
-                ? 0
-                : last30Minutes.reduce(max);
+            final maxMinutesHeatmap =
+                history.map((d) => d.minutes).reduce(max);
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  // Centered Naughty Score card
+                  // --- Naughty Score card (centered) ---
                   Center(
                     child: SizedBox(
                       width: 260,
@@ -203,20 +223,18 @@ class HomePage extends StatelessWidget {
 
                   const SizedBox(height: 24),
 
-                  // ===== HEATMAP ABOVE COLUMNS =====
-                  if (last30Minutes.isNotEmpty) ...[
-                    Text(
-                      'Last 30 days',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 10),
-                    _buildHeatmapGrid(last30Minutes, maxMinutesHeatmap),
-                    const SizedBox(height: 8),
-                    _buildHeatmapLegend(),
-                    const SizedBox(height: 30),
-                  ],
+                  // --- GitHub-like heatmap ABOVE the columns ---
+                  Text(
+                    'Last ${history.length} days',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildGithubHeatmap(history, maxMinutesHeatmap),
+                  const SizedBox(height: 8),
+                  _buildHeatmapLegend(),
+                  const SizedBox(height: 30),
 
-                  // ===== LAST 10 DAYS BAR CHART =====
+                  // --- Last 10 days bar chart: left = 9 days ago, right = today ---
                   Container(
                     height: 220,
                     padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -225,88 +243,77 @@ class HomePage extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: Colors.grey.shade300),
                     ),
-                    child: last10Minutes.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No history yet – use your phone normally for a few days.',
-                              textAlign: TextAlign.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: last10.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final day = entry.value;
+                        final minutes = day.minutes.toDouble();
+                        final hours = minutes / 60.0;
+
+                        // left = 9 days ago, right = today
+                        final delta = last10.length - 1 - index;
+                        final dayLabel =
+                            delta == 0 ? 'Today' : '${delta}d ago';
+
+                        final double barHeight =
+                            maxMinutesForBars == 0
+                                ? 0
+                                : (minutes / maxMinutesForBars) * 150;
+
+                        final ratio = maxMinutesForBars == 0
+                            ? 0.0
+                            : minutes / maxMinutesForBars;
+                        Color barColor;
+                        if (ratio <= 0.33) {
+                          barColor = Colors.green.shade400;
+                        } else if (ratio <= 0.66) {
+                          barColor = Colors.amber.shade400;
+                        } else {
+                          barColor = Colors.red.shade400;
+                        }
+
+                        return Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Container(
+                              height: barHeight,
+                              width: 20,
+                              decoration: BoxDecoration(
+                                color: barColor,
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(4),
+                                  topRight: Radius.circular(4),
+                                ),
+                              ),
                             ),
-                          )
-                        : Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.spaceAround,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children:
-                                last10Minutes.asMap().entries.map((entry) {
-                              final index = entry.key; // 0..9
-                              final minutes = entry.value.toDouble();
-                              final hours = minutes / 60.0;
-
-                              // left = 9 days ago, right = today
-                              final delta =
-                                  last10Minutes.length - 1 - index;
-                              final dayLabel = delta == 0
-                                  ? 'Today'
-                                  : '${delta}d ago';
-
-                              final double barHeight =
-                                  maxMinutesForBars == 0
-                                      ? 0
-                                      : (minutes / maxMinutesForBars) * 150;
-
-                              final ratio = maxMinutesForBars == 0
-                                  ? 0.0
-                                  : minutes / maxMinutesForBars;
-                              Color barColor;
-                              if (ratio <= 0.33) {
-                                barColor = Colors.green.shade400;
-                              } else if (ratio <= 0.66) {
-                                barColor = Colors.amber.shade400;
-                              } else {
-                                barColor = Colors.red.shade400;
-                              }
-
-                              return Column(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Container(
-                                    height: barHeight,
-                                    width: 20,
-                                    decoration: BoxDecoration(
-                                      color: barColor,
-                                      borderRadius:
-                                          const BorderRadius.only(
-                                        topLeft: Radius.circular(4),
-                                        topRight: Radius.circular(4),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    dayLabel,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.black54,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${hours.toStringAsFixed(1)}h',
-                                    style: const TextStyle(
-                                      fontSize: 9,
-                                      color: Colors.black45,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                ],
-                              );
-                            }).toList(),
-                          ),
+                            const SizedBox(height: 5),
+                            Text(
+                              dayLabel,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.black54,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${hours.toStringAsFixed(1)}h',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                color: Colors.black45,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                        );
+                      }).toList(),
+                    ),
                   ),
 
                   const SizedBox(height: 30),
 
-                  // Single English settings card
+                  // Single settings card, English
                   _buildNavigationCard(
                     context: context,
                     title: 'Adjust long-term goals',
@@ -324,52 +331,152 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  /// Heatmap: 7 rows (like weekdays) x N columns, with bigger cells and no overflow.
-  Widget _buildHeatmapGrid(List<int> dailyMinutes, int maxMinutes) {
-    const double cellSize = 18;
-    const int rows = 7;
-    final int days = dailyMinutes.length;
-    final int columns = (days / rows).ceil();
-    final double totalHeight = rows * (cellSize + 6); // cell + padding
+  /// GitHub-like heatmap: columns = weeks, rows = weekdays (Mon–Sun),
+  /// with month labels along the top and weekday labels on the left.
+  Widget _buildGithubHeatmap(List<_DayUsage> history, int maxMinutes) {
+    const double cellSize = 14;
+    const int rows = 7; // Mon..Sun
 
-    return SizedBox(
-      height: totalHeight,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: List.generate(columns, (col) {
-            return Column(
-              children: List.generate(rows, (row) {
-                final int index = col * rows + row;
-                if (index >= days) {
-                  return const SizedBox(
-                    width: cellSize,
-                    height: cellSize,
-                  );
-                }
-                final minutes = dailyMinutes[index];
-                final color = _heatmapColor(minutes, maxMinutes);
-                return Padding(
-                  padding: const EdgeInsets.all(3.0),
-                  child: Container(
-                    width: cellSize,
-                    height: cellSize,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: Colors.grey.shade300,
-                        width: 0.5,
-                      ),
-                    ),
-                  ),
-                );
-              }),
+    // 1) Build a continuous date range from Monday..Sunday boundaries
+    history.sort((a, b) => a.date.compareTo(b.date));
+    DateTime first = history.first.date;
+    DateTime last = history.last.date;
+
+    // Normalize to midnight
+    first = DateTime(first.year, first.month, first.day);
+    last = DateTime(last.year, last.month, last.day);
+
+    // Start at previous Monday
+    while (first.weekday != DateTime.monday) {
+      first = first.subtract(const Duration(days: 1));
+    }
+    // End at next Sunday
+    while (last.weekday != DateTime.sunday) {
+      last = last.add(const Duration(days: 1));
+    }
+
+    final int totalDays = last.difference(first).inDays + 1;
+    final int weeks = (totalDays / rows).ceil();
+
+    // Map from date (yyyy-MM-dd) to minutes
+    final Map<String, int> minutesByDate = {
+      for (final d in history)
+        '${d.date.year.toString().padLeft(4, '0')}-'
+            '${d.date.month.toString().padLeft(2, '0')}-'
+            '${d.date.day.toString().padLeft(2, '0')}': d.minutes,
+    };
+
+    // 2) Build grid data
+    final List<List<_DayUsage?>> grid = List.generate(
+      weeks,
+      (col) => List<_DayUsage?>.filled(rows, null, growable: false),
+      growable: false,
+    );
+
+    for (int i = 0; i < totalDays; i++) {
+      final date = first.add(Duration(days: i));
+      final col = i ~/ rows;
+      final row = i % rows;
+      final key =
+          '${date.year.toString().padLeft(4, '0')}-'
+          '${date.month.toString().padLeft(2, '0')}-'
+          '${date.day.toString().padLeft(2, '0')}';
+      final minutes = minutesByDate[key] ?? 0;
+      grid[col][row] = _DayUsage(date, minutes);
+    }
+
+    // 3) Month labels on top (similar to GitHub)
+    final List<String?> monthLabels = List<String?>.filled(weeks, null);
+    int? lastMonth;
+    for (int col = 0; col < weeks; col++) {
+      // use Monday of that week for labeling
+      final cell = grid[col][0];
+      if (cell == null) continue;
+      final m = cell.date.month;
+      if (lastMonth != m && cell.date.day <= 7) {
+        monthLabels[col] = _monthNames[m];
+        lastMonth = m;
+      }
+    }
+
+    // 4) Weekday labels (Mon/Wed/Fri)
+    const weekdayLabels = ['Mon', '', 'Wed', '', 'Fri', '', ''];
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Left: weekday labels
+        Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(rows, (row) {
+            final label = weekdayLabels[row];
+            return SizedBox(
+              height: cellSize + 6,
+              child: Text(
+                label,
+                style: const TextStyle(fontSize: 10, color: Colors.black54),
+              ),
             );
           }),
         ),
-      ),
+        const SizedBox(width: 4),
+        // Right: months + heatmap grid
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Month labels row
+                Row(
+                  children: List.generate(weeks, (col) {
+                    final label = monthLabels[col] ?? '';
+                    return SizedBox(
+                      width: cellSize + 6,
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                            fontSize: 10, color: Colors.black54),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 4),
+                // Heatmap cells
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: List.generate(weeks, (col) {
+                    return Column(
+                      children: List.generate(rows, (row) {
+                        final day = grid[col][row];
+                        if (day == null) {
+                          return const SizedBox(
+                            width: cellSize,
+                            height: cellSize,
+                          );
+                        }
+                        final color =
+                            _heatmapColor(day.minutes, maxMinutes);
+                        return Padding(
+                          padding: const EdgeInsets.all(1.5),
+                          child: Container(
+                            width: cellSize,
+                            height: cellSize,
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        );
+                      }),
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -410,5 +517,12 @@ class HomePage extends StatelessWidget {
       ),
     );
   }
+}
+
+// small helper
+class _DayUsage {
+  final DateTime date;
+  final int minutes;
+  _DayUsage(this.date, this.minutes);
 }
 
