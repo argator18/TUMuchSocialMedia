@@ -5,6 +5,7 @@ import pickle as pkl
 import openai
 import uuid
 import io
+import json
 
 from pydantic import BaseModel
 from pathlib import Path
@@ -113,7 +114,7 @@ def get_last_user_log(user_id):
     if filtered_df.empty:
         return f"Empty log - The user has not asked for anything in the last {time_delay} hours"
     else:
-        return filtered_df.iloc[0].to_csv(index=False)
+        return str(filtered_df.iloc[0].to_json(index=False))
 
 def get_request_number(user_id):
     log_df = pd.read_pickle(log_path)
@@ -301,10 +302,10 @@ def transcribe_voice(audio_bytes: bytes):
 
 def ask_with_image(messages):
     response = client.responses.create(
-        model="gpt-5-mini",
-        input=messages
+        model="gpt-4o",
+        input=messages,
     )
 
-    return response
+    return json.loads(response.output[0].content[0].text)
 
     # %%

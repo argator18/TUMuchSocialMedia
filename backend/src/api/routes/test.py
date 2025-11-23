@@ -108,15 +108,11 @@ async def supervise(payload: SuperviseInput):
             # generate file name
             file_name = f"img.png"
 
-            # ensure directory exists
-            import os
-            os.makedirs("./supervise_images", exist_ok=True)
-
             # write file
             with open(file_name, "wb") as f:
                 f.write(image_bytes)
 
-            print("Saved screenshot to:", file_name)
+            #print("Saved screenshot to:", file_name)
 
         except Exception as e:
             print("Image save error:", e)
@@ -128,10 +124,10 @@ async def supervise(payload: SuperviseInput):
     agent_reply = await supervisor.check_goal_follow_through(
         "682596a5-7863-4419-9138-5f52c2779e61",
         text_for_supervisor,
-        image_bytes           # still pass bytes if needed
+        file_name           # still pass bytes if needed
     )
 
     return JSONResponse(
         status_code=200,
-        content=agent_reply.dict()
+        content=agent_reply
     )
