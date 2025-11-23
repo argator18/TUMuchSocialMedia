@@ -1,6 +1,50 @@
 import 'package:flutter/material.dart';
 
-// Die Hauptkonfigurationsseite für Limits und Ziele.
+// NOTE: Die DummySharedPreferences Klasse und die Schlüssel/Präfixe
+// werden hier dupliziert.
+class DummySharedPreferences {
+  // Simuliert das Speichern. Verwenden Sie ein statisches Map, damit die Werte über Instanzen hinweg erhalten bleiben.
+  static final Map<String, dynamic> _storage = {
+    // Simulierte Startwerte für Impact Scores
+    'impact_score_Stresslevel': 75.0, 
+    'impact_score_Sozialer Vergleich': 85.0,
+    'impact_score_Zeitverschwendung': 40.0,
+    'impact_score_FOMO (Fear of Missing Out)': 90.0,
+    // Simulierte Startwerte für kontrollierte Apps
+    'controlled_apps': ['Instagram', 'TikTok', 'YouTube'], 
+  }; 
+
+  Future<double?> getDouble(String key) async {
+    return _storage.containsKey(key) && _storage[key] is double ? _storage[key] : null;
+  }
+  
+  Future<List<String>?> getStringList(String key) async {
+    // StringList muss von dynamic nach List<String> gecastet werden
+    final dynamic value = _storage.containsKey(key) ? _storage[key] : null;
+    return value is List ? List<String>.from(value) : null;
+  }
+  
+  Future<void> setDouble(String key, double value) async {
+    _storage[key] = value;
+    debugPrint('DUMMY: Speichere double: $key = $value');
+  }
+  
+  Future<void> setStringList(String key, List<String> value) async {
+    _storage[key] = value;
+    debugPrint('DUMMY: Speichere StringList: $key = $value');
+  }
+
+
+  static Future<DummySharedPreferences> getInstance() async {
+    return DummySharedPreferences();
+  }
+}
+const String impactScorePrefix = 'impact_score_';
+const String controlledAppsKey = 'controlled_apps';
+
+// ************************************************************
+// AppConfigs: Kombinierte Seite für Limits, Apps und anpassbare Impact-Scores
+// ************************************************************
 class AppConfigs extends StatefulWidget {
   const AppConfigs({super.key});
 
@@ -9,220 +53,207 @@ class AppConfigs extends StatefulWidget {
 }
 
 class _AppConfigsState extends State<AppConfigs> {
-  // 1. Controller für die gewünschte Zeit in Minuten
-  final TextEditingController _timeLimitController = TextEditingController(text: '60');
+  // Zustand für die anpassbaren Impact Scores
+  Map<String, double> _loadedImpactScores = {};
+  List<String> _controlledApps = [];
+  bool _isLoading = true;
+  bool _isSaving = false;
   
-  // 2. Liste aller wählbaren Apps
-  final List<String> _availableApps = [
-    'Facebook',
-    'Instagram',
-    'TikTok',
-    'Twitter (X)',
-    'Reddit',
-    'YouTube (Feed)',
-    'Snapchat',
+  // Die festen Kategorien aus OnboardingPage
+  final List<String> _categories = [
+    'Stresslevel',
+    'Sozialer Vergleich',
+    'Zeitverschwendung',
+    'FOMO (Fear of Missing Out)',
   ];
-  
-  // Set zur Speicherung der ausgewählten Apps
-  Set<String> _selectedApps = {'Instagram', 'TikTok'};
-  
-  // 3. Zustand für die Browser-Nutzung
-  bool _includeBrowser = false;
 
   @override
-  void dispose() {
-    _timeLimitController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _loadSettings();
   }
 
-  void _submitGoals() {
-    final timeLimitString = _timeLimitController.text.trim();
-    // Konvertiere Eingabe in Minuten
-    final timeLimitMinutes = int.tryParse(timeLimitString) ?? 0;
+  // Lade Impact Scores und kontrollierte Apps aus dem Speicher
+  Future<void> _loadSettings() async {
+    final prefs = await DummySharedPreferences.getInstance();
+    final Map<String, double> scores = {};
     
-    if (timeLimitMinutes <= 0 || _selectedApps.isEmpty) {
-       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Bitte geben Sie eine gültige Zeit an (>0) und wählen Sie mindestens eine App aus.'),
-        ),
+    // Impact Scores laden
+    for (final category in _categories) {
+      final key = '$impactScorePrefix$category';
+      final score = await prefs.getDouble(key);
+      // Wenn der Score nicht gefunden wird, verwende 50.0 als Standard
+      scores[category] = score ?? 50.0;
+    }
+    
+    // Kontrollierte Apps laden
+    final apps = await prefs.getStringList(controlledAppsKey);
+
+    setState(() {
+      _loadedImpactScores = scores;
+      _controlledApps = apps ?? [];
+      _isLoading = false;
+    });
+  }
+  
+  // Speichere die Impact Scores im Speicher
+  Future<void> _saveImpactScores() async {
+    setState(() { _isSaving = true; });
+    final prefs = await DummySharedPreferences.getInstance();
+
+    // 1. Speichere Impact Scores
+    for (final entry in _loadedImpactScores.entries) {
+      await prefs.setDouble('$impactScorePrefix${entry.key}', entry.value);
+    }
+    
+    // 2. Simulierte Speicherung der App Limits und kontrollierten Apps
+    // Hier müsste die Logik für die App Limits und das Speichern der kontrollierten Apps folgen.
+
+    // Zeige eine kurze Bestätigung 
+    if(mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Einstellungen erfolgreich gespeichert!'), duration: Duration(seconds: 2)),
       );
-      return;
     }
 
-    // Konsolidierte Ziele speichern/anzeigen (Simulierte Speicherung)
-    debugPrint('--- Neue Ziele ---');
-    debugPrint('Tägliches Limit: $timeLimitMinutes Minuten');
-    debugPrint('Überwachte Apps: ${_selectedApps.join(', ')}');
-    debugPrint('Browser-Nutzung inkludiert: $_includeBrowser');
-    debugPrint('------------------');
-    
-    // AKTUALISIERT: Navigieren Sie zur Homepage und ersetzen Sie den Navigationsstapel.
-    Navigator.pushReplacementNamed(context, '/home');
+    setState(() { _isSaving = false; });
   }
-
-  // Funktion zum Öffnen des App-Auswahldialogs
-  void _openAppSelectionDialog() async {
-    final List<String>? results = await showDialog<List<String>>(
-      context: context,
-      builder: (BuildContext context) {
-        // Temporäre Kopie der Auswahl für den Dialog
-        Set<String> tempSelected = Set.from(_selectedApps);
-        
-        return StatefulBuilder(
-          builder: (context, setStateInDialog) {
-            return AlertDialog(
-              title: const Text('Apps auswählen'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: _availableApps.map((app) {
-                    return CheckboxListTile(
-                      title: Text(app),
-                      value: tempSelected.contains(app),
-                      onChanged: (bool? isChecked) {
-                        setStateInDialog(() {
-                          if (isChecked == true) {
-                            tempSelected.add(app);
-                          } else {
-                            tempSelected.remove(app);
-                          }
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-              actions: <Widget>[
-                TextButton(
-                  child: const Text('Abbrechen'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
-                ElevatedButton(
-                  child: const Text('Bestätigen'),
-                  onPressed: () {
-                    Navigator.of(context).pop(tempSelected.toList());
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    
-    if (results != null) {
-      setState(() {
-        _selectedApps = Set.from(results);
-      });
-    }
+  
+  // Callback für den Schieberegler
+  void _updateImpactScore(String category, double newValue) {
+    setState(() {
+      _loadedImpactScores[category] = newValue;
+    });
   }
-
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ihre Social Media Limits'),
-        backgroundColor: colorScheme.inversePrimary,
+        title: const Text('Ziele, Apps & Einblicke'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Definieren Sie Ihre täglichen Nutzungslimits.',
-                style: Theme.of(context).textTheme.headlineSmall,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            // --- 1. App-Limits (Ziele setzen) ---
+            Text(
+              '1. App-Nutzungslimits',
+              style: Theme.of(context).textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text('Legen Sie Ihre maximal zulässige tägliche Nutzungszeit für Ablenkungs-Apps fest.'),
+            const SizedBox(height: 15),
+            Center(
+              child: Text(
+                'Konfigurations-UI für Limits folgt hier.',
+                style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey.shade600),
               ),
-              const SizedBox(height: 20),
+            ),
+            
+            const Divider(height: 40),
+            
+            // --- 2. Kontrollierte Apps ---
+            Text(
+              '2. Kontrollierte Apps',
+              style: Theme.of(context).textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text('Apps, die überwacht werden und zu Ihrem "Naughty Score" beitragen:'),
+            const SizedBox(height: 15),
+            
+            // HIER IST DIE KORRIGIERTE LISTENAUSGABE
+            Wrap(
+              spacing: 8.0, 
+              runSpacing: 4.0, 
+              children: List<Widget>.generate(_controlledApps.length, (index) {
+                final app = _controlledApps[index];
+                return Chip(
+                  label: Text(app),
+                  backgroundColor: Colors.deepPurple.shade50,
+                  labelStyle: TextStyle(color: Colors.deepPurple.shade700),
+                );
+              }),
+            ),
+            
+            const Divider(height: 40),
+            
+            // --- 3. Ihre Motivation (Einblicke bearbeiten) ---
+            Text(
+              '3. Ihre Motivation (Einblicke bearbeiten)',
+              style: Theme.of(context).textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text('Passen Sie Ihre ursprüngliche Selbsteinschätzung an, um Ihre Motivation zu reflektieren. Diese Werte beeinflussen die App-Meldungen.'),
+            const SizedBox(height: 30),
 
-              // 1. Zeitlimit-Eingabefeld
-              TextField(
-                controller: _timeLimitController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Erlaubte Social Media Zeit pro Tag (Minuten)',
-                  border: OutlineInputBorder(),
-                  suffixText: 'Minuten',
-                  hintText: 'z.B. 60',
+            // Schieberegler-Liste
+            ..._loadedImpactScores.keys.map((category) {
+              final score = _loadedImpactScores[category]!;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 25.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          category,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text(
+                          '${score.round()}%',
+                          style: Theme.of(context).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                        ),
+                      ],
+                    ),
+                    Slider(
+                      value: score,
+                      min: 0,
+                      max: 100,
+                      divisions: 20,
+                      label: score.round().toString(),
+                      onChanged: (double newValue) {
+                        _updateImpactScore(category, newValue);
+                      },
+                    ),
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Geringer Einfluss', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                        Text('Hoher Einfluss', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+
+            const SizedBox(height: 20),
+            
+            // Speichern-Button
+            Center(
+              child: FilledButton.icon(
+                onPressed: _isSaving ? null : _saveImpactScores,
+                icon: _isSaving 
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.save),
+                label: Text(_isSaving ? 'Speichern...' : 'Änderungen speichern'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
+                  textStyle: const TextStyle(fontSize: 18),
                 ),
               ),
-              
-              const SizedBox(height: 30),
-
-              // 2. App-Auswahl
-              Text(
-                'Überwachte Apps',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-
-              // Ausgewählte Apps als Chips anzeigen
-              Wrap(
-                spacing: 8.0,
-                runSpacing: 4.0,
-                children: _selectedApps.map((app) {
-                  return Chip(
-                    label: Text(app),
-                    onDeleted: () {
-                      setState(() {
-                        _selectedApps.remove(app);
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-
-              const SizedBox(height: 10),
-              
-              // Button zum Öffnen des App-Auswahl-Dialogs
-              OutlinedButton.icon(
-                onPressed: _openAppSelectionDialog,
-                icon: const Icon(Icons.apps),
-                label: Text(
-                  _selectedApps.isEmpty 
-                  ? 'Apps hinzufügen' 
-                  : 'Apps bearbeiten (${_selectedApps.length} ausgewählt)'
-                ),
-              ),
-
-              const SizedBox(height: 30),
-              
-              // 3. Browser-Checkbox
-              SwitchListTile(
-                title: const Text('Include Social media usage through browser.'),
-                subtitle: const Text('Activate this to include'),
-                value: _includeBrowser,
-                onChanged: (bool value) {
-                  setState(() {
-                    _includeBrowser = value;
-                  });
-                },
-                secondary: const Icon(Icons.language),
-              ),
-              
-              const Spacer(),
-
-              // Button zum Speichern
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _submitGoals,
-                  icon: const Icon(Icons.save),
-                  label: const Text('Save'), // AKTUALISIERT
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    textStyle: const TextStyle(fontSize: 18),
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 50),
+          ],
         ),
       ),
     );
