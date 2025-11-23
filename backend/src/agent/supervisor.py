@@ -1,11 +1,19 @@
+# %%
+# 
 import base64
 from .helpers import *
 from .prompts import *
 
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
+
+
+
 async def check_goal_follow_through(
     user_id: str,
     handy_logs,
-    screenshot_b64: bytes | None = None,
+    image_path: str,
 ):
     """
     Check whether current app behavior matches the given GOAL.
@@ -40,6 +48,7 @@ async def check_goal_follow_through(
     # ==============================
     #   Build multi-modal "input"
     # ==============================
+    base64_image = encode_image(image_path)
 
     # System-Kontext: Gatekeeper + Goal Coach + Personality + User Prefs + Logs
     messages = [
@@ -57,7 +66,7 @@ async def check_goal_follow_through(
                 { "type": "input_text", "text": "what's in this image?" },
                 {
                     "type": "input_image",
-                    "image_url": f"data:image/png;base64,{screenshot_b64}",
+                    "image_url": f"data:image/png;base64,{base64_image}",
                 }
             ]
         }
@@ -65,7 +74,9 @@ async def check_goal_follow_through(
 
     response = ask_with_image(messages)
 
-    print(response)
+
 
     return response
 
+
+# %%
