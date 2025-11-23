@@ -122,11 +122,11 @@ async def ask_for_app_permission(user_id: str, query: str, app_usage):
 # %%
 def main():
     mikey = "682596a5-7863-4419-9138-5f52c2779e61" 
-    donatello = "ab7b6c53-f4b0-4238-ac64-da383193425d"
+    #donatello = "ab7b6c53-f4b0-4238-ac64-da383193425d"
     #query = "I just scrolled for 10 minuts and would like some more"
     query = input("Type the query: ")
 
-    answer = asyncio.run(ask_for_app_permission(donatello, query, []))
+    answer = asyncio.run(ask_for_app_permission(mikey, query, []))
     print(answer)
 
 if __name__ == "__main__":

@@ -42,10 +42,28 @@ async def check_goal_follow_through(
     # ==============================
 
     # System-Kontext: Gatekeeper + Goal Coach + Personality + User Prefs + Logs
-    messagessystem_content = [
-        {"type": "input_text", "text": GATEKEEPER_SYSTEM_PROMPT},
-        {"type": "input_text", "text": GOAL_COACH_SYSTEM_PROMPT},
+    message = [
+        {
+            "role": "system", 
+            "content": SUPER
+        },
+        {
+            "role": "system", 
+            "content": context_text
+        },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "what's in this image?" },
+                {
+                    "type": "input_image",
+                    "image_url": f"data:image/jpeg;base64,{base64_image}",
+                }
+            ]
+        }
     ]
+
+    
 
     if user_pref:
         system_content.append({"type": "input_text", "text": user_pref})

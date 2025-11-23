@@ -75,12 +75,14 @@ def get_user_preferences(user_id):
     return latest["preference"], latest["preferred_personality"], latest['selected_apps']
 
 def get_name(id):
+    global users_df
     # Filter entries for this user
     user_entry = users_df[users_df["id"] == id].iloc[0]
 
     return user_entry["name"]
 
 def get_user_log(user_id: str, time_delay: int):
+    global log_df
     # the previous user requests and answers from the user to the agent
     # All request during the last *time_delay** hours (should be positve int)
 
@@ -103,6 +105,7 @@ def get_user_log(user_id: str, time_delay: int):
         return filtered_df.to_csv(index=False)
 
 def get_last_user_log(user_id):
+    global log_df
     # Filter logs
     filtered_df = log_df[
         (log_df['user_id'] == user_id)
@@ -114,6 +117,7 @@ def get_last_user_log(user_id):
         return filtered_df.iloc[0].to_csv(index=False)
 
 def get_request_number(user_id):
+    global log_df
     # Ensure your column is datetime type
     log_df['date_time'] = pd.to_datetime(log_df['date_time'])
 
@@ -128,7 +132,9 @@ def get_request_number(user_id):
         (log_df['date_time'].dt.date == today)
     ]
 
-    return len(filtered_df)
+    print(filtered_df)
+
+    return filtered_df.shape[0]
 
 
 

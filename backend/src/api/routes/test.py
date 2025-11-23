@@ -27,7 +27,7 @@ class OnboardInput(BaseModel):
 
 
 class SuperviseInput(BaseModel):
-    text: list[dict]  # or list[ContextEvent]
+    logs: list[dict]  # or list[ContextEvent]
     image: str | None = None
     
 
@@ -47,8 +47,9 @@ async def echo(msg: BaseMessage):
 @router.get("/todays_count")
 async def todays_count(user_id: str):
     n = agent.get_request_number(user_id)
-
-    return {"daily_count": n}
+    response_count = {"daily_count": n}
+    print(response_count)
+    return response_count
     
 @router.post("/onboard")
 async def onboard(payload: OnboardInput):
@@ -102,11 +103,10 @@ async def supervise(payload: SuperviseInput):
         image_bytes = base64.b64decode(b64)
 
     # convert the structured events into something your supervisor expects
-    text_for_supervisor = json.dumps(payload.text)
+    text_for_supervisor = json.dumps(payload.logs)
 
     agent_reply = await supervisor.check_goal_follow_through(
         "682596a5-7863-4419-9138-5f52c2779e61",
-        "Answering messages in 5 minutes",
         text_for_supervisor,
         image_bytes,
     )
