@@ -13,10 +13,10 @@ from .prompts import *
 async def analyzer_user_behaviour(user_id: str, past_day: int):
     pass
 
-async def ask_for_app_permission(user_id: str, query: str):
+async def ask_for_app_permission(user_id: str, query: str, app_usage):
 
     # for testing
-    user_preferences = "The user asking is Tim. He is very ambitionate and in his exam period and want you to be very strict with him"
+    #user_preferences = "The user asking is Tim. He is very ambitionate and in his exam period and want you to be very strict with him"
     user_name = get_name(user_id)
     user_pref, user_fav_personality = get_user_preferences(user_id)
 
