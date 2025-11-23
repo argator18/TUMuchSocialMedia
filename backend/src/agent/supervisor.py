@@ -5,6 +5,9 @@ from .helpers import *
 from .prompts import *
 
 def encode_image(image_path):
+    if not os.path.isfile(image_path):
+        raise RuntimeError("Not an Image")
+
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 

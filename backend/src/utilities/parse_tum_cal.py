@@ -55,7 +55,7 @@ def parse_today_and_tomorrow(events):
 
 
 hardcoded_event = {
-    "lecture": "Final Pitch - Reply (Garching, TUM)",
+    "lecture": "Final Pitch - Reply (Garching, TUM) - Important!",
     "date": today.strftime("%Y-%m-%d"),
     "start": "11:00",
     "end": "13:00",

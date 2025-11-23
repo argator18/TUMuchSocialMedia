@@ -1,12 +1,14 @@
 import re
 import base64
 import json
+import os
 from fastapi import APIRouter, File, UploadFile, Form
 from typing import Any, Dict
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import src.agent.agent as agent
 import src.agent.supervisor as supervisor
+import src.utilities.parse_tum_cal as calendar
 
 router = APIRouter()
 
@@ -36,7 +38,8 @@ async def echo(msg: BaseMessage):
     agent_reply = await agent.ask_for_app_permission(
         user_id=msg.user_id,
         query=msg.text,
-        app_usage=msg.usage
+        app_usage=msg.usage,
+        #calender_events=[calendar.hardcoded_event] incoming events # Hardcorded calendar
     )
 
     return JSONResponse(
@@ -126,6 +129,8 @@ async def supervise(payload: SuperviseInput):
         text_for_supervisor,
         file_name           # still pass bytes if needed
     )
+
+    os.remove(file_name)
 
     return JSONResponse(
         status_code=200,
