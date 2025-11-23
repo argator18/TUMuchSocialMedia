@@ -33,6 +33,8 @@ dependencies:
 
   http: ^1.2.0  # or any recent version
   flutter_svg: ^2.0.11+1
+  shared_preferences: ^2.2.0  # or current latest
+
   flutter_launcher_icons: "^0.13.1"
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
