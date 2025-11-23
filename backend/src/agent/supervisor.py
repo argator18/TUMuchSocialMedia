@@ -45,14 +45,14 @@ async def check_goal_follow_through(
     message = [
         {
             "role": "system", 
-            "content": SUPER
+            "content": GOAL_COACH_SYSTEM_PROMPT
         },
         {
             "role": "system", 
             "content": context_text
         },
         {
-            "role": "user",
+            "role": "Does the provided logs",
             "content": [
                 { "type": "input_text", "text": "what's in this image?" },
                 {

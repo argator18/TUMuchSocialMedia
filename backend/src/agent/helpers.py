@@ -123,11 +123,8 @@ def get_request_number(user_id):
     # Today's date
     today = datetime.today().date()
 
-    # Filter rows
-    user_id_to_filter = "some_user_id"
-
     filtered_df = log_df[
-        (log_df['user_id'] == user_id_to_filter) &
+        (log_df['user_id'] == user_id) &
         (log_df['date_time'].dt.date == today)
     ]
 
@@ -143,6 +140,8 @@ def update_log(user_id, query, answer):
     log_df = pd.read_pickle(log_path)    # Create timestamp (seconds only)
 
     date_time = datetime.now().replace(microsecond=0)
+
+    print("Systems log length:", log_df.shape(0))
 
     # Create a new row as a DataFrame for safe concatenation
     new_entry = pd.DataFrame([{
