@@ -48,13 +48,12 @@ preferences_path = BASE_DIR / "user_preferences.pkl"
 users_path = BASE_DIR / "users.pkl"
 log_path = BASE_DIR / "log.pkl"
 
-preferences_df = pd.read_pickle(preferences_path)
-users_df = pd.read_pickle(users_path)
-log_df = pd.read_pickle(log_path)
-
 # getter >>>>>>>>>>>>>>>>>>>>>>>>>>
 
 def get_user_preferences(user_id):
+
+    preferences_df = pd.read_pickle(preferences_path)
+
     # Filter entries for this user
     user_entries = preferences_df[preferences_df["user_id"] == user_id]
     
@@ -75,14 +74,14 @@ def get_user_preferences(user_id):
     return latest["preference"], latest["preferred_personality"], latest['selected_apps']
 
 def get_name(id):
-    global users_df
+    users_df = pd.read_pickle(users_path)
     # Filter entries for this user
     user_entry = users_df[users_df["id"] == id].iloc[0]
 
     return user_entry["name"]
 
 def get_user_log(user_id: str, time_delay: int):
-    global log_df
+    log_df = pd.read_pickle(log_path)
     # the previous user requests and answers from the user to the agent
     # All request during the last *time_delay** hours (should be positve int)
 
@@ -105,7 +104,7 @@ def get_user_log(user_id: str, time_delay: int):
         return filtered_df.to_csv(index=False)
 
 def get_last_user_log(user_id):
-    global log_df
+    log_df = pd.read_pickle(log_path)
     # Filter logs
     filtered_df = log_df[
         (log_df['user_id'] == user_id)
@@ -117,7 +116,7 @@ def get_last_user_log(user_id):
         return filtered_df.iloc[0].to_csv(index=False)
 
 def get_request_number(user_id):
-    global log_df
+    log_df = pd.read_pickle(log_path)
     # Ensure your column is datetime type
     log_df['date_time'] = pd.to_datetime(log_df['date_time'])
 
@@ -141,8 +140,8 @@ def get_request_number(user_id):
 
 # setter >>>>>>>>>>>>>>>>>>
 def update_log(user_id, query, answer):
-    global log_df
-    # Create timestamp (seconds only)
+    log_df = pd.read_pickle(log_path)    # Create timestamp (seconds only)
+
     date_time = datetime.now().replace(microsecond=0)
 
     # Create a new row as a DataFrame for safe concatenation
@@ -204,8 +203,8 @@ def format_time_factors_to_str(factors):
 
 
 def add_user(onboarding_config):
-    global users_df
-    global preferences_df
+    preferences_df = pd.read_pickle(preferences_path)
+    users_df = pd.read_pickle(users_path)
 
     # create a new row in users and user_preferences
     id = str(uuid.uuid4())
@@ -272,7 +271,7 @@ def update_user_preferences():
     pass
 
 def delete_user_logs(user_id):
-    global log_df
+    log_df = pd.read_pickle(log_path)
     
     # Keep only rows where user_id does NOT match
     log_df = log_df[log_df['user_id'] != user_id].reset_index(drop=True)
