@@ -4,7 +4,7 @@ from .prompts import *
 
 async def check_goal_follow_through(
     user_id: str,
-    logs,
+    handy_logs,
     screenshot_b64: str | None = None,
 ):
     """
@@ -16,22 +16,25 @@ async def check_goal_follow_through(
 
     user_name = get_name(user_id)
 
-    user_pref, _, _ = get_user_preferences(user_id)
+    #user_pref, _, _ = get_user_preferences(user_id)
 
     # TODO users last request
+    last_log = get_last_user_log(user_id)
     
     # Logs schön als Text
-    if isinstance(logs, str):
-        logs_text = logs
+    if isinstance(handy_logs, str):
+        handy_logs_str = handy_logs
     else:
-        logs_text = "\n".join([str(entry) for entry in logs])
+        handy_logs_str = "\n".join([str(entry) for entry in handy_logs])
 
     context_text = f"""
     CONTEXT:
     - User name: {user_name}
 
+    - most recent user query: {last_log}
+
     LOGS (most recent last):
-    {logs_text}
+    {handy_logs_str}
     """
 
     # ==============================
@@ -39,7 +42,7 @@ async def check_goal_follow_through(
     # ==============================
 
     # System-Kontext: Gatekeeper + Goal Coach + Personality + User Prefs + Logs
-    system_content = [
+    messagessystem_content = [
         {"type": "input_text", "text": GATEKEEPER_SYSTEM_PROMPT},
         {"type": "input_text", "text": GOAL_COACH_SYSTEM_PROMPT},
     ]

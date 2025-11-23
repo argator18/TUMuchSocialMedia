@@ -102,6 +102,16 @@ def get_user_log(user_id: str, time_delay: int):
     else:
         return filtered_df.to_csv(index=False)
 
+def get_last_user_log(user_id):
+    # Filter logs
+    filtered_df = log_df[
+        (log_df['user_id'] == user_id)
+    ].sort_values(by="date_time", ascending=False)
+
+    if filtered_df.empty:
+        return f"Empty log - The user has not asked for anything in the last {time_delay} hours"
+    else:
+        return filtered_df.iloc[0].to_csv(index=False)
 
 def get_request_number(user_id):
     # Ensure your column is datetime type

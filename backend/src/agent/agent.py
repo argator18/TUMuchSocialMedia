@@ -19,13 +19,13 @@ def parse_usage(usage_list, tracked_apps):
     # STEP 1 — Filter packages
     filtered = []
     for item in usage_list:
-        pkg = item.get("packageName", "").lower()
+        pkg = item.packageName.lower()
 
         # keep package if one of your app names appears in the packageName
         for app in tracked_apps:
             if app in pkg:
                 filtered.append(
-                    {"app": app, "minutes": item.get("totalMinutes")}
+                    {"app": app, "minutes": item.totalMinutes}
                 )
 
     lines = []
