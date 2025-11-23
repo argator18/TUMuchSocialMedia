@@ -1,12 +1,13 @@
 // onboarding_page.dart
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import 'app_storage.dart';
-import 'dart:convert';               // <--- NEW
-import 'package:http/http.dart' as http;  // <--- NEW
-
+import 'app_configs.dart';
+import 'usage_service.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -21,7 +22,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   AppPrefs? _prefs;
 
-  // Time-of-day impact scores (0–10)
+  // Name entered on first slide
+  final TextEditingController _nameController = TextEditingController();
+
+  // Time-of-day impact scores (0–10) - must match settings categories
   Map<String, double> _impactScores = {
     'After waking up': 0,
     'During work/uni': 0,
@@ -30,7 +34,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   };
 
   // Available & selected apps
-  final List<String> _availableApps = [
+  final List<String> _availableApps = const [
     'Instagram',
     'TikTok',
     'YouTube',
@@ -41,8 +45,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
   ];
 
   List<String> _selectedApps = [
-    'Instagram',
-    'TikTok',
   ];
 
   Future<void> _loadPrefs() async {
@@ -53,6 +55,84 @@ class _OnboardingPageState extends State<OnboardingPage> {
     setState(() {
       _impactScores[category] = newValue;
     });
+  }
+
+  /// Send onboarding data to backend in the format
+  /// payload.config expected by OnboardInput:
+  ///
+  /// {
+  ///   "config": {
+  ///     "name": "...",
+  ///     "surname": "...",
+  ///     "apps": [...],
+  ///     "morning_factor": ...,
+  ///     "worktime_factor": ...,
+  ///     "evening_factor": ...,
+  ///     "before_bed_factor": ...
+  ///   }
+  /// }
+  ///
+  /// And store returned user_id for all future API requests.
+  Future<void> _sendOnboardingToServer() async {
+    final name = _nameController.text.trim();
+    // We no longer ask for surname on the UI, but keep the field for backend compatibility.
+    const surname = '';
+
+    // Map our categories to the required JSON fields
+    final morningFactor = _impactScores['After waking up']?.round() ?? 0;
+    final worktimeFactor = _impactScores['During work/uni']?.round() ?? 0;
+    final eveningFactor = _impactScores['In the evening']?.round() ?? 0;
+    final beforeBedFactor =
+        _impactScores['Before going to bed']?.round() ?? 0;
+
+    // Apps as lowercase like in your example
+    final appsLower = _selectedApps.map((app) => app.toLowerCase()).toList();
+
+    final uri = Uri.parse('$API_BASE/onboard');
+
+    final payload = {
+      "config": {
+        "name": name,
+        "surname": surname,
+        "apps": appsLower,
+        "morning_factor": morningFactor,
+        "worktime_factor": worktimeFactor,
+        "evening_factor": eveningFactor,
+        "before_bed_factor": beforeBedFactor,
+      }
+    };
+
+    try {
+      final response = await http.post(
+        uri,
+        headers: const {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(payload),
+      );
+
+      debugPrint('Onboard POST status: ${response.statusCode}');
+      debugPrint('Onboard response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final userId = decoded['user_id'];
+
+        if (userId != null) {
+          final prefs = await AppPrefs.getInstance();
+          await prefs.setString(userIdKey, userId.toString());
+          debugPrint('Stored user_id: $userId');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error sending onboarding data: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not send onboarding data.'),
+        ),
+      );
+    }
   }
 
   void _nextPage() async {
@@ -69,91 +149,146 @@ class _OnboardingPageState extends State<OnboardingPage> {
         curve: Curves.easeIn,
       );
     } else {
-      // Last page -> save onboarding results
       final prefs = _prefs!;
 
-      // 1. Save impact scores (time-of-day sliders)
+      // 1. Save impact scores locally
       for (final entry in _impactScores.entries) {
         await prefs.setDouble('$impactScorePrefix${entry.key}', entry.value);
       }
 
-      // 2. Save selected apps
+      // 2. Save apps locally
       await prefs.setStringList(controlledAppsKey, _selectedApps);
 
-      // 3. Mark onboarding as complete
+      // 3. Save onboarding complete flag
       await prefs.setBool(onboardingCompleteKey, true);
 
-      // 4. Navigate away (e.g. to reason page)
+      // 4. Send onboarding data to backend (wrapped in "config")
+      await _sendOnboardingToServer();
+
+      // 5. Navigate to main page (adjust route name if needed)
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/reason');
+      Navigator.pushReplacementNamed(context, '/');
     }
   }
 
   // --- Slides ---
 
+  /// 1) Welcome + name only
   Widget _buildWelcomeSlide() {
-    return const Padding(
-      padding: EdgeInsets.all(24.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Icon(Icons.spa, size: 80, color: Colors.green),
-          SizedBox(height: 30),
-          Text(
-            'You are using TUMuch social media.',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 15),
-          Text(
-            'Let us help you be more mindful and use your time more consciously.',
-            style: TextStyle(fontSize: 18, color: Colors.black54),
-            textAlign: TextAlign.center,
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const Icon(Icons.spa, size: 80, color: Colors.green),
+            const SizedBox(height: 30),
+            const Text(
+              'You are using TUMuch Social Media',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 15),
+            const Text(
+              'Let us help you be more mindful and use your time more consciously.',
+              style: TextStyle(fontSize: 18, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 30),
+
+            // Name input only
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Name',
+                hintText: 'How should we call you?',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  /// 2) Permissions (usage access + accessibility)
   Widget _buildPermissionSlide() {
-    return const Padding(
-      padding: EdgeInsets.all(24.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Icon(Icons.security, size: 80, color: Colors.blue),
-          SizedBox(height: 30),
-          Text(
-            'System Permissions',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 15),
-          Text(
-            'Damit wir Ihre App-Nutzung überwachen können, sind spezielle Berechtigungen notwendig. Wir speichern Ihre Daten nur lokal.',
-            style: TextStyle(fontSize: 18, color: Colors.black54),
-            textAlign: TextAlign.center,
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const Icon(Icons.security, size: 80, color: Colors.blue),
+            const SizedBox(height: 30),
+            const Text(
+              'System Permissions',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 15),
+            const Text(
+              'To monitor your social media usage and gently intervene, we need special Android permissions. '
+              'We only use this data to help you stay in control.',
+              style: TextStyle(fontSize: 18, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 30),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.bar_chart),
+                title: const Text('Usage access'),
+                subtitle: const Text(
+                  'Allow TUMuch Social Media to see your app usage statistics for the last 24 hours.',
+                ),
+                trailing: ElevatedButton(
+                  onPressed: () {
+                    UsageService.openUsageSettings();
+                  },
+                  child: const Text('Open settings'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.accessibility_new),
+                title: const Text('Accessibility service'),
+                subtitle: const Text(
+                  'Enable our accessibility service so we can detect when social apps are on screen and ask you for a conscious decision.',
+                ),
+                trailing: ElevatedButton(
+                  onPressed: () {
+                    UsageService.openAccessibilitySettings();
+                  },
+                  child: const Text('Open settings'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'You can always change these permissions later in Android system settings.',
+              style: TextStyle(fontSize: 16, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  /// 3) Usage slide – now uses real data from UsageService.getUsageSummary()
   Widget _buildUsageSlide() {
-    final List<int> weeklyUsageMinutes =
-        List.generate(7, (index) => 30 + Random().nextInt(150));
-    final double maxUsage = weeklyUsageMinutes.reduce(max).toDouble();
-    final List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Last Week´s Social Media Usage ',
+            'Your recent social media usage',
             style: Theme.of(context)
                 .textTheme
                 .headlineMedium!
@@ -161,48 +296,126 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Eine Darstellung Ihrer geschätzten App-Nutzung der letzten 7 Tage (in Minuten pro Tag).',
+            'This is a summary of how much time you spent in different apps during the last 24 hours.',
             style: TextStyle(fontSize: 16, color: Colors.black54),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 20),
           Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: weeklyUsageMinutes.asMap().entries.map((entry) {
-                final index = entry.key;
-                final usage = entry.value.toDouble();
-                final double barHeightRatio = usage / maxUsage;
-                final double barHeight = barHeightRatio * 180;
+            child: FutureBuilder<List<dynamic>>(
+              future: UsageService.getUsageSummary(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      '${usage.round()}',
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.black87),
+                if (snapshot.hasError) {
+                  return const Center(
+                    child: Text(
+                      'Could not load usage data.',
+                      style: TextStyle(color: Colors.redAccent),
                     ),
-                    const SizedBox(height: 4),
-                    Container(
-                      height: barHeight,
-                      width: 30,
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple.shade300,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(6),
-                          topRight: Radius.circular(6),
-                        ),
+                  );
+                }
+
+                final data = snapshot.data ?? [];
+
+                if (data.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No usage data available. Make sure you enabled usage access in the previous step.',
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                }
+
+                // We expect a list of maps like:
+                // { "appName": "Instagram", "totalMinutes": 120, ... }
+                final entries = data
+                    .whereType<Map<dynamic, dynamic>>()
+                    .map((m) => m.map((key, value) =>
+                        MapEntry(key.toString(), value)))
+                    .toList();
+
+                if (entries.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'Usage data format not recognized.',
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                }
+
+                final usages = entries
+                    .map((e) => (e['totalMinutes'] as num?)?.toDouble() ?? 0.0)
+                    .toList();
+
+                final maxUsage =
+                    usages.isEmpty ? 0.0 : usages.reduce(max).toDouble();
+
+                return ListView.builder(
+                  itemCount: entries.length,
+                  itemBuilder: (context, index) {
+                    final entry = entries[index];
+                    final appName = entry['appName']?.toString() ??
+                        entry['packageName']?.toString() ??
+                        'Unknown app';
+                    final minutes =
+                        (entry['totalMinutes'] as num?)?.toDouble() ?? 0.0;
+
+                    final barRatio =
+                        (maxUsage > 0) ? (minutes / maxUsage) : 0.0;
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              appName,
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 4,
+                            child: Stack(
+                              children: [
+                                Container(
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade300,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                FractionallySizedBox(
+                                  widthFactor: barRatio.clamp(0.0, 1.0),
+                                  child: Container(
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: Colors.deepPurple.shade300,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 50,
+                            child: Text(
+                              '${minutes.round()} min',
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      weekdays[index],
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
+                    );
+                  },
                 );
-              }).toList(),
+              },
             ),
           ),
         ],
@@ -217,7 +430,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'During which times during the day do you want to be specifically mindful about your usage?',
+            'When do you want to be especially mindful?',
             style: Theme.of(context)
                 .textTheme
                 .headlineMedium!
@@ -225,7 +438,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Rate how strong you want us to intervene during different times of the day.',
+            'Rate how strongly you want us to intervene during different times of the day.',
             style: TextStyle(fontSize: 16, color: Colors.black54),
           ),
           const SizedBox(height: 30),
@@ -257,13 +470,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         children: [
                           Text(
                             'Not at all',
-                            style:
-                                TextStyle(fontSize: 12, color: Colors.black54),
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.black54),
                           ),
                           Text(
                             'Very strongly',
-                            style:
-                                TextStyle(fontSize: 12, color: Colors.black54),
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.black54),
                           ),
                         ],
                       ),
@@ -285,7 +498,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'On which apps do you waste time?',
+            'Which apps should we track?',
             style: Theme.of(context)
                 .textTheme
                 .headlineMedium!
@@ -293,7 +506,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Choose for which apps you need us to help you change your habits. You can change this in the Settings later.',
+            'Choose the apps where you want us to help you change your habits. ',
             style: TextStyle(fontSize: 16, color: Colors.black54),
           ),
           const SizedBox(height: 30),
@@ -341,13 +554,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ),
           SizedBox(height: 15),
           Text(
-            'We don\'t want to forbid you from using your apps. We want you to make conscious decisions about when and why you use social media. We detect the moment you drift off and help you come back on track.',
+            'We do not want to forbid you from using your apps. '
+            'We want you to make conscious decisions about when and why you use social media. '
+            'We detect the moment you drift off and help you get back on track.',
             style: TextStyle(fontSize: 18, color: Colors.black54),
             textAlign: TextAlign.center,
           ),
           SizedBox(height: 15),
           Text(
-            'So gewinnen Sie die Kontrolle über Ihre Zeit zurück.',
+            'This way, you regain control over your time.',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -372,13 +587,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   void initState() {
     super.initState();
-    // _loadPrefs() happens in didChangeDependencies
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _loadPrefs();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _nameController.dispose();
+    super.dispose();
   }
 
   @override
@@ -418,28 +639,21 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       ? TextButton(
                           onPressed: () {
                             _pageController.previousPage(
-                              duration: const Duration(milliseconds: 300),
+                              duration:
+                                  const Duration(milliseconds: 300),
                               curve: Curves.easeIn,
                             );
                           },
-                          child: const Text('Zurück'),
+                          child: const Text('Back'),
                         )
                       : const SizedBox(width: 80),
-                  _currentPage == 0
-                      ? TextButton(
-                          onPressed: () {
-                            _pageController.jumpToPage(slides.length - 1);
-                          },
-                          child: const Text('Überspringen'),
-                        )
-                      : const SizedBox.shrink(),
                   FilledButton(
                     onPressed: _nextPage,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 25, vertical: 12),
                     ),
-                    child: Text(isLastPage ? 'Starten' : 'Weiter'),
+                    child: Text(isLastPage ? 'Start' : 'Next'),
                   ),
                 ],
               ),

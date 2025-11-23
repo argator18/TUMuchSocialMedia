@@ -82,9 +82,22 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "openAccessibilitySettings" -> {
+                    openAccessibilitySettings(this)
+                    result.success(null)
+                }
+
+
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun openAccessibilitySettings(context: Context) {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -148,15 +161,36 @@ class MainActivity : FlutterActivity() {
         }
 
         val arr = JSONArray()
+        val pm = context.packageManager
+
         for ((pkg, t) in totalTime) {
+            val minutes = (t / 60000).toInt()
+            if (minutes <= 0) continue  // filter here too, cleanest place
+
+            val appName = try {
+                val appInfo = pm.getApplicationInfo(pkg, 0)
+                pm.getApplicationLabel(appInfo).toString()
+            } catch (e: Exception) {
+                pkg // fallback
+            }
+
             val obj = JSONObject()
             obj.put("packageName", pkg)
+            obj.put("appName", appName)           // ← NEW FIELD
             obj.put("totalTimeForeground", t)
+            obj.put("totalMinutes", minutes)      // ← ADD minutes here
             obj.put("lastTimeUsed", lastUsed[pkg] ?: 0L)
             arr.put(obj)
         }
 
-        return arr.toString()
+        // Sort array by totalMinutes DESC
+        val sorted = JSONArray()
+        arr.toList()
+            .sortedByDescending { (it as JSONObject).getInt("totalMinutes") }
+            .forEach { sorted.put(it) }
+
+        return sorted.toString()
+
     }
 
     // ---------------- SCREEN CAPTURE LOGIC ----------------
@@ -327,5 +361,13 @@ class MainActivity : FlutterActivity() {
             Log.e("MainActivity", "stopScreenCapture error: ${e.message}", e)
         }
     }
+}
+
+private fun JSONArray.toList(): List<Any> {
+    val list = mutableListOf<Any>()
+    for (i in 0 until this.length()) {
+        list.add(this.get(i))
+    }
+    return list
 }
 

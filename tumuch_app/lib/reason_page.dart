@@ -11,6 +11,7 @@ import 'context_logger.dart';
 import 'screen_capture_service.dart';
 import 'app_configs.dart';
 import 'usage_service.dart';
+import 'app_storage.dart';
 
 class ReasonPage extends StatefulWidget {
   /// Optionally pass the app name, e.g. ReasonPage(appName: 'Instagram')
@@ -68,80 +69,93 @@ class _ReasonPageState extends State<ReasonPage> {
 
   // ---------------- API CALL: TEXT ----------------
 
-Future<void> _sendToBackend(String text) async {
-  if (text.trim().isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Bitte gib einen Grund an.')),
-    );
-    return;
-  }
-
-  setState(() {
-    _isSubmitting = true;
-    _allowResult = null;
-    _allowedMinutes = null;
-    _replyMessage = null;
-  });
-
-  // 🔹 NEW: get usage data from native side
-  final usage = await UsageService.getUsageSummary();
-
-  final uri = Uri.parse('$API_BASE/echo');
-  final payload = {
-    // simplest: encode app + reason together
-    'text': '[${widget.appName}] $text',
-    'usage': usage, // 🔹 NEW: attach usage as an array
-  };
-
-  try {
-    final resp = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(payload),
-    );
-
-    if (resp.statusCode == 200) {
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      final allow = data['allow'] as bool?;
-      final time = (data['time'] as num?)?.toInt();
-      final reply = data['reply'] as String?;
+    Future<void> _sendToBackend(String text) async {
+      if (text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bitte gib einen Grund an.')),
+        );
+        return;
+      }
 
       setState(() {
-        _allowResult = allow;
-        _allowedMinutes = time;
-        _replyMessage = reply;
+        _isSubmitting = true;
+        _allowResult = null;
+        _allowedMinutes = null;
+        _replyMessage = null;
       });
 
-      ContextLogger().log('api_decision', {
-        'allow': allow,
-        'time': time,
-        'reply': reply,
-        'appName': widget.appName,
-      });
+      // 🔹 Usage from native side
+      final usage = await UsageService.getUsageSummary();
 
-      // optional: screen capture + send
-      await ScreenCaptureService.captureAndSend();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Serverfehler: ${resp.statusCode}'),
-        ),
-      );
+      // 🔹 Load user_id from storage
+      final prefs = await AppPrefs.getInstance();
+      final userId = await prefs.getString(userIdKey);
+
+      final uri = Uri.parse('$API_BASE/echo');
+      debugPrint('Usage summary (text): $usage');
+
+        // or nicely as JSON:
+        debugPrint('Usage summary (text, JSON): ${jsonEncode(usage)}');
+
+      final payload = {
+        // send user_id explicitly in the JSON body
+        'user_id': userId,
+        // simplest: encode app + reason together
+        'text': '[${widget.appName}] $text',
+        'usage': usage,
+      };
+
+      try {
+        // You can keep using buildDefaultHeaders if you want
+        final headers = await buildDefaultHeaders();
+        final resp = await http.post(
+          uri,
+          headers: headers,
+          body: jsonEncode(payload),
+        );
+
+        if (resp.statusCode == 200) {
+          final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          final allow = data['allow'] as bool?;
+          final time = (data['time'] as num?)?.toInt();
+          final reply = data['reply'] as String?;
+
+          setState(() {
+            _allowResult = allow;
+            _allowedMinutes = time;
+            _replyMessage = reply;
+          });
+
+          ContextLogger().log('api_decision', {
+            'allow': allow,
+            'time': time,
+            'reply': reply,
+            'appName': widget.appName,
+          });
+
+          // optional: screen capture + send
+          await ScreenCaptureService.captureAndSend();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Serverfehler: ${resp.statusCode}'),
+            ),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Netzwerkfehler: $e'),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isSubmitting = false;
+          });
+        }
+      }
     }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Netzwerkfehler: $e'),
-      ),
-    );
-  } finally {
-    if (mounted) {
-      setState(() {
-        _isSubmitting = false;
-      });
-    }
-  }
-}
 
   // ---------------- API CALL: VOICE ----------------
 
@@ -161,8 +175,12 @@ Future<void> _sendToBackend(String text) async {
         _replyMessage = null;
       });
 
-      // 🔹 NEW: get usage data
+      // 🔹 Usage from native side
       final usage = await UsageService.getUsageSummary();
+
+      // 🔹 Load user_id from storage
+      final prefs = await AppPrefs.getInstance();
+      final userId = await prefs.getString(userIdKey);
 
       final uri = Uri.parse('$API_BASE/voice');
 
@@ -175,7 +193,18 @@ Future<void> _sendToBackend(String text) async {
               contentType: MediaType('audio', 'm4a'),
             ),
           )
-          ..fields['usage'] = jsonEncode(usage); // 🔹 NEW: usage as JSON string
+          // usage as JSON string
+          ..fields['usage'] = jsonEncode(usage);
+
+        // 🔹 send user_id along with the form fields
+        if (userId != null) {
+          request.fields['user_id'] = userId;
+        }
+
+        // optional: also attach it as a header if your backend prefers
+        // if (userId != null) {
+        //   request.headers['X-User-Id'] = userId;
+        // }
 
         final streamed = await request.send();
         final resp = await http.Response.fromStream(streamed);

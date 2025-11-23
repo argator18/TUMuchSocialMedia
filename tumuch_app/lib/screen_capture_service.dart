@@ -7,6 +7,13 @@ import 'package:http/http.dart' as http;
 import 'context_logger.dart';
 import 'app_configs.dart';
 
+import 'package:http/http.dart' as http;
+
+// IMPORTANT: import app_storage.dart:
+import 'package:tumuch_app/app_storage.dart';
+// or, if you’re using relative imports:
+// import '../app_storage.dart';
+
 class ScreenCaptureService {
   static const MethodChannel _channel = MethodChannel('app.channel.route');
 
@@ -33,9 +40,10 @@ class ScreenCaptureService {
       };
 
       final uri = Uri.parse('$API_BASE/supervise');
+      final headers = await buildDefaultHeaders();
       final resp = await http.post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode(payload),
       );
 
