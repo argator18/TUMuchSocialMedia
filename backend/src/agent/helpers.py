@@ -236,7 +236,7 @@ def add_user(onboarding_config):
     preference = f"""
     The user want to restrict his usage on the following app: {apps}
 
-    His longterm goal is to achieve a constant combined screentime of these apps at around 1 hour.
+    His longterm goal is to achieve a constant combined screentime of these apps at around 2 hours.
 
     {timing_preference}
 
