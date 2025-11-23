@@ -58,83 +58,70 @@ class _OnboardingPageState extends State<OnboardingPage> {
     });
   }
 
-  /// Send onboarding data to backend in the format
-  /// payload.config expected by OnboardInput:
-  ///
-  /// {
-  ///   "config": {
-  ///     "name": "...",
-  ///     "surname": "...",
-  ///     "apps": [...],
-  ///     "morning_factor": ...,
-  ///     "worktime_factor": ...,
-  ///     "evening_factor": ...,
-  ///     "before_bed_factor": ...
-  ///   }
-  /// }
-  ///
-  /// And store returned user_id for all future API requests.
-  Future<void> _sendOnboardingToServer() async {
-    final name = _nameController.text.trim();
-    // We no longer ask for surname on the UI, but keep the field for backend compatibility.
-    const surname = '';
+    Future<void> _sendOnboardingToServer() async {
+      final name = _nameController.text.trim();
+      const surname = '';
 
-    // Map our categories to the required JSON fields
-    final morningFactor = _impactScores['After waking up']?.round() ?? 0;
-    final worktimeFactor = _impactScores['During work/uni']?.round() ?? 0;
-    final eveningFactor = _impactScores['In the evening']?.round() ?? 0;
-    final beforeBedFactor =
-        _impactScores['Before going to bed']?.round() ?? 0;
+      final morningFactor = _impactScores['After waking up']?.round() ?? 0;
+      final worktimeFactor = _impactScores['During work/uni']?.round() ?? 0;
+      final eveningFactor = _impactScores['In the evening']?.round() ?? 0;
+      final beforeBedFactor =
+          _impactScores['Before going to bed']?.round() ?? 0;
 
-    // Apps as lowercase like in your example
-    final appsLower = _selectedApps.map((app) => app.toLowerCase()).toList();
+      final appsLower = _selectedApps.map((app) => app.toLowerCase()).toList();
 
-    final uri = Uri.parse('$API_BASE/onboard');
+      final uri = Uri.parse('$API_BASE/onboard');
 
-    final payload = {
-      "config": {
-        "name": name,
-        "surname": surname,
-        "apps": appsLower,
-        "morning_factor": morningFactor,
-        "worktime_factor": worktimeFactor,
-        "evening_factor": eveningFactor,
-        "before_bed_factor": beforeBedFactor,
-      }
-    };
-
-    try {
-      final response = await http.post(
-        uri,
-        headers: const {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(payload),
-      );
-
-      debugPrint('Onboard POST status: ${response.statusCode}');
-      debugPrint('Onboard response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        final userId = decoded['user_id'];
-
-        if (userId != null) {
-          final prefs = await AppPrefs.getInstance();
-          await prefs.setString(userIdKey, userId.toString());
-          debugPrint('Stored user_id: $userId');
+      final payload = {
+        "config": {
+          "name": name,
+          "surname": surname,
+          "apps": appsLower,
+          "morning_factor": morningFactor,
+          "worktime_factor": worktimeFactor,
+          "evening_factor": eveningFactor,
+          "before_bed_factor": beforeBedFactor,
         }
+      };
+
+      try {
+        final response = await http.post(
+          uri,
+          headers: const {
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(payload),
+        );
+
+        debugPrint('Onboard POST status: ${response.statusCode}');
+        debugPrint('Onboard response body: ${response.body}');
+
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          final userId = decoded['user_id'];
+
+          debugPrint('Onboard returned user_id: $userId');
+
+          if (userId != null) {
+            final prefs = await AppPrefs.getInstance();
+            await prefs.setString(userIdKey, userId.toString());
+            debugPrint('Stored user_id in SharedPreferences: $userId');
+          } else {
+            debugPrint('WARNING: /onboard response had no user_id field.');
+          }
+        } else {
+          debugPrint('Onboard failed with status ${response.statusCode}');
+        }
+      } catch (e) {
+        debugPrint('Error sending onboarding data: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not send onboarding data.'),
+          ),
+        );
       }
-    } catch (e) {
-      debugPrint('Error sending onboarding data: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not send onboarding data.'),
-        ),
-      );
     }
-  }
 
   void _nextPage() async {
     if (_prefs == null) {
