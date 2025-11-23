@@ -24,6 +24,12 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONArray
 import org.json.JSONObject
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.util.Base64
+import java.io.ByteArrayOutputStream
+
 
 class MainActivity : FlutterActivity() {
 
@@ -165,7 +171,7 @@ class MainActivity : FlutterActivity() {
 
         for ((pkg, t) in totalTime) {
             val minutes = (t / 60000).toInt()
-            if (minutes <= 0) continue  // filter here too, cleanest place
+            if (minutes <= 5) continue  // filter here: only > 0 min
 
             val appName = try {
                 val appInfo = pm.getApplicationInfo(pkg, 0)
@@ -174,12 +180,37 @@ class MainActivity : FlutterActivity() {
                 pkg // fallback
             }
 
+            // Build base64 icon
+            val iconBase64: String? = try {
+                val drawable = pm.getApplicationIcon(pkg)
+                val bitmap: Bitmap = if (drawable is BitmapDrawable && drawable.bitmap != null) {
+                    drawable.bitmap
+                } else {
+                    // Render any non-bitmap drawable into a bitmap
+                    val size = 128
+                    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bmp)
+                    drawable.setBounds(0, 0, canvas.width, canvas.height)
+                    drawable.draw(canvas)
+                    bmp
+                }
+
+                val stream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+            } catch (e: Exception) {
+                null
+            }
+
             val obj = JSONObject()
             obj.put("packageName", pkg)
-            obj.put("appName", appName)           // ← NEW FIELD
+            obj.put("appName", appName)
             obj.put("totalTimeForeground", t)
-            obj.put("totalMinutes", minutes)      // ← ADD minutes here
+            obj.put("totalMinutes", minutes)
             obj.put("lastTimeUsed", lastUsed[pkg] ?: 0L)
+            if (iconBase64 != null) {
+                obj.put("iconBase64", iconBase64)
+            }
             arr.put(obj)
         }
 
@@ -190,9 +221,7 @@ class MainActivity : FlutterActivity() {
             .forEach { sorted.put(it) }
 
         return sorted.toString()
-
     }
-
     // ---------------- SCREEN CAPTURE LOGIC ----------------
 
     private fun startScreenCapture(result: MethodChannel.Result) {

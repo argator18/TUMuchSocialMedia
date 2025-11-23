@@ -327,13 +327,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     ),
                   );
                 }
-
                 // We expect a list of maps like:
-                // { "appName": "Instagram", "totalMinutes": 120, ... }
+                // { "appName": "Instagram", "totalMinutes": 12, "iconBase64": "..." }
                 final entries = data
                     .whereType<Map<dynamic, dynamic>>()
-                    .map((m) => m.map((key, value) =>
-                        MapEntry(key.toString(), value)))
+                    .map((m) => m.map((key, value) => MapEntry(key.toString(), value)))
                     .toList();
 
                 if (entries.isEmpty) {
@@ -361,6 +359,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                         'Unknown app';
                     final minutes =
                         (entry['totalMinutes'] as num?)?.toDouble() ?? 0.0;
+                    final iconBase64 = entry['iconBase64'] as String?;
 
                     final barRatio =
                         (maxUsage > 0) ? (minutes / maxUsage) : 0.0;
@@ -369,14 +368,39 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       padding: const EdgeInsets.symmetric(vertical: 6.0),
                       child: Row(
                         children: [
+                          // Icon + name
                           Expanded(
-                            flex: 2,
-                            child: Text(
-                              appName,
-                              style: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w600),
+                            flex: 3,
+                            child: Row(
+                              children: [
+                                if (iconBase64 != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.memory(
+                                        base64Decode(iconBase64),
+                                        width: 32,
+                                        height: 32,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    appName,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+
+                          // Bar
                           Expanded(
                             flex: 4,
                             child: Stack(
@@ -401,9 +425,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
                               ],
                             ),
                           ),
+
                           const SizedBox(width: 8),
+
+                          // Minutes text
                           SizedBox(
-                            width: 50,
+                            width: 60,
                             child: Text(
                               '${minutes.round()} min',
                               textAlign: TextAlign.right,
