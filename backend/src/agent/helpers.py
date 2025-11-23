@@ -3,6 +3,9 @@ import os
 import pandas as pd
 import pickle as pkl
 import openai
+import uuid
+import io
+
 from pydantic import BaseModel
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -122,8 +125,65 @@ def update_log(user_id, query, answer):
 
     log_df.to_pickle(log_path)
 
-def add_user():
-    pass
+def add_user(onboarding_config):
+    global users_df
+    global preferences_df
+
+    # create a new row in users and user_preferences
+    id = str(uuid.uuid4())
+    name = onboarding_config['name']
+    surname = onboarding_config['surname']
+    date_time = datetime.now().replace(microsecond=0)
+
+    # define the new row
+    new_user = pd.DataFrame([{
+        'id': id, 
+        'name': name, 
+        'surname': surname, 
+        'joined': date_time
+    }])
+
+    # Append using concat adn save(recommended; .append() is deprecated)
+    users_df = pd.concat([users_df, new_user], ignore_index=True)
+    users_df.to_pickle(users_path)
+
+    # Now the preferences:
+    apps = str(onboarding_config['apps']).strip("[]")
+    morning_factor = onboarding_config['morning_factor']
+    worktime_factor = onboarding_config['worktime_factor']
+    evening_factor = onboarding_config['evening_factor']
+    before_bed_factor = onboarding_config['before_bed_factor']
+
+    preference = f"""
+    The user want to restrict his usage on the following app: {apps}
+
+    For the different times of the day we want the following controls:
+    after waking up: {morning_factor}
+    during working time: {worktime_factor}
+    in the evening: {evening_factor}
+    before going to bed: {before_bed_factor}
+
+    each number is between 1 and 10. 
+    10 means at this time you are ought to be very strict during that time period. 
+    1 means you do not restrict the user at all. 
+    5 means you can be convinced if you think the reason is deliberate and useful, and even for rare occasions you also allow doom scrolling.     
+    
+    """
+
+    personality = "chill"
+
+    new_preference = pd.DataFrame([{
+        "date_time": date_time,
+        "user_id": id,
+        "preference": preference,
+        "preferred_personality": personality
+    }])
+
+    # append to the pkl
+    preferences_df = pd.concat([preferences_df, new_preference], ignore_index=True)
+    preferences_df.to_pickle(preferences_path)
+
+    return id
 
 def update_user_preferences():
     pass
@@ -143,14 +203,16 @@ def delete_user_logs(user_id):
 
 
 def send_simple_query(messages, response_schema):
+    
     response = client.responses.parse(
         model="gpt-5.1",   
         input=messages,
         text_format=response_schema, 
     )
+
     return response.output_parsed
 
-import io
+
 
 def transcribe_voice(audio_bytes: bytes):
     audio_buffer = io.BytesIO(audio_bytes)
