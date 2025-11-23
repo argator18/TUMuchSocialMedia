@@ -10,7 +10,6 @@ import src.agent.supervisor as supervisor
 
 router = APIRouter()
 
-class UserId
 
 class UsageItem(BaseModel):
     packageName: str
