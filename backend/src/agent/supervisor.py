@@ -92,7 +92,7 @@ LOGS (most recent last):
     response = client.responses.parse(
         model="gpt-5.1",                 # <--- hier dein Vision-Modell
         input=vision_input,
-        response_format=GoalFeedbackFormat,  # Pydantic Schema
+        text_format=GoalFeedbackFormat,  # Pydantic Schema
     )
 
     return response.output_parsed
