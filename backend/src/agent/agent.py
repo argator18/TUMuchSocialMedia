@@ -77,7 +77,7 @@ async def ask_for_app_permission(user_id: str, query: str, app_usage):
     hardcoded_event = {
         "lecture": "Final Pitch - Reply (Garching, TUM) - Important!",
         "date": today,
-        "start": "11:00",
+        "start": "9:00",
         "end": "13:00",
     }
 
