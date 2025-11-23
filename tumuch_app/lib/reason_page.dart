@@ -13,6 +13,9 @@ import 'app_configs.dart';
 import 'usage_service.dart';
 import 'app_storage.dart';
 
+/// TUM corporate blue
+const Color tumBlue = Color(0xFF0065BD);
+
 class ReasonPage extends StatefulWidget {
   /// Optionally pass the app name, e.g. ReasonPage(appName: 'Instagram')
   final String appName;
@@ -29,13 +32,6 @@ class _ReasonPageState extends State<ReasonPage> {
 
   bool _isRecording = false;
   String? _audioPath;
-
-  // Quick suggestions INCLUDING specific time requests
-  final List<String> _quickSuggestions = [
-    'Ich möchte __APP__ 5 Minuten lang nutzen, um auf wichtige Nachrichten zu antworten.',
-    'Ich möchte __APP__ 3 Minuten lang nutzen, um etwas Wichtiges zu posten.',
-    'Ich möchte __APP__ 2 Minuten lang nutzen, um kurz zu scrollen und dann zurück zur Aufgabe zu gehen.',
-  ];
 
   // API response state
   bool _isSubmitting = false;
@@ -56,18 +52,11 @@ class _ReasonPageState extends State<ReasonPage> {
     }).toList();
   }
 
-
   @override
   void initState() {
     super.initState();
 
-    // 1) Replace placeholder with real app name
-    for (var i = 0; i < _quickSuggestions.length; i++) {
-      _quickSuggestions[i] =
-          _quickSuggestions[i].replaceAll('__APP__', widget.appName);
-    }
-
-    // 2) Log that this page was opened
+    // Log that this page was opened
     ContextLogger().log('open_page', {
       'page': 'ReasonPage',
       'appName': widget.appName,
@@ -81,191 +70,370 @@ class _ReasonPageState extends State<ReasonPage> {
     super.dispose();
   }
 
+  // ---------------- HELPERS FOR TODAY'S SUMMARY ----------------
+
+  /// Fetch request count from /todays_count endpoint for this user.
+  Future<int> _fetchTodaysRequestCount(String? userId) async {
+    if (userId == null) return 0;
+
+    final uri = Uri.parse('$API_BASE/todays_count?user_id=$userId');
+    try {
+      final headers = await buildDefaultHeaders();
+      final resp = await http.get(uri, headers: headers);
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return (data['daily_count'] as num?)?.toInt() ?? 0;
+      } else {
+        debugPrint('todays_count error: ${resp.statusCode}');
+        return 0;
+      }
+    } catch (e) {
+      debugPrint('todays_count network error: $e');
+      return 0;
+    }
+  }
+
+  /// Load today's usage for the selected apps + request count from backend.
+  Future<Map<String, dynamic>> _loadTodaySummary() async {
+    final prefs = await AppPrefs.getInstance();
+
+    // selected apps from onboarding/settings
+    final selectedApps =
+        await prefs.getStringList(controlledAppsKey) ?? <String>[];
+
+    // full usage from native side
+    final usageRaw = await UsageService.getUsageSummary();
+    final entries = usageRaw
+        .whereType<Map>()
+        .map((m) => m.map((k, v) => MapEntry(k.toString(), v)))
+        .toList();
+
+    int totalMinutes = 0;
+
+    for (final entry in entries) {
+      final appName = entry['appName']?.toString() ??
+          entry['packageName']?.toString() ??
+          '';
+
+      // convert to minutes; support both totalMinutes and totalTimeForeground
+      final minutes = (entry['totalMinutes'] as num?)?.toInt() ??
+          ((entry['totalTimeForeground'] as num?)?.toInt() ?? 0) ~/ 60000;
+
+      // only count selected apps
+      if (selectedApps.contains(appName)) {
+        totalMinutes += minutes;
+      }
+    }
+
+    final hours = totalMinutes / 60.0;
+
+    // fetch todays_count from backend
+    final userId = await prefs.getString(userIdKey);
+    final requests = await _fetchTodaysRequestCount(userId);
+
+    return {
+      'hours': hours,
+      'requests': requests,
+    };
+  }
+
+  Widget _buildTodayUsage() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _loadTodaySummary(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16.0),
+            child: Center(
+              child: SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              'Could not load today\'s usage.',
+              style: TextStyle(color: Colors.redAccent, fontSize: 12),
+            ),
+          );
+        }
+
+        final hours = (snapshot.data!['hours'] as num?)?.toDouble() ?? 0.0;
+        final requests = (snapshot.data!['requests'] as int?) ?? 0;
+
+        final hoursLabel = hours.toStringAsFixed(1);
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12.0,
+                      horizontal: 8.0,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          hoursLabel,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'hours today\nin selected apps',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12.0,
+                      horizontal: 8.0,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$requests',
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'requests made\nso far today',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // ---------------- API CALL: TEXT ----------------
 
-    Future<void> _sendToBackend(String text) async {
-      if (text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Bitte gib einen Grund an.')),
-        );
-        return;
-      }
-
-      setState(() {
-        _isSubmitting = true;
-        _allowResult = null;
-        _allowedMinutes = null;
-        _replyMessage = null;
-      });
-
-      // 🔹 Usage from native side
-      final usageRaw = await UsageService.getUsageSummary();
-      final usage = _stripIconsFromUsage(usageRaw);
-
-      // 🔹 Load user_id from storage
-      final prefs = await AppPrefs.getInstance();
-      final userId = await prefs.getString(userIdKey);
-
-      final uri = Uri.parse('$API_BASE/echo');
-      debugPrint('Usage summary (text): $usage');
-
-        // or nicely as JSON:
-        debugPrint('Usage summary (text, JSON): ${jsonEncode(usage)}');
-
-      final payload = {
-        // send user_id explicitly in the JSON body
-        'user_id': userId,
-        // simplest: encode app + reason together
-        'text': '[${widget.appName}] $text',
-        'usage': usage,
-      };
-
-      try {
-        // You can keep using buildDefaultHeaders if you want
-        final headers = await buildDefaultHeaders();
-        final resp = await http.post(
-          uri,
-          headers: headers,
-          body: jsonEncode(payload),
-        );
-
-        if (resp.statusCode == 200) {
-          final data = jsonDecode(resp.body) as Map<String, dynamic>;
-          final allow = data['allow'] as bool?;
-          final time = (data['time'] as num?)?.toInt();
-          final reply = data['reply'] as String?;
-
-          setState(() {
-            _allowResult = allow;
-            _allowedMinutes = time;
-            _replyMessage = reply;
-          });
-
-          ContextLogger().log('api_decision', {
-            'allow': allow,
-            'time': time,
-            'reply': reply,
-            'appName': widget.appName,
-          });
-
-          // optional: screen capture + send
-          await ScreenCaptureService.captureAndSend();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Serverfehler: ${resp.statusCode}'),
-            ),
-          );
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Netzwerkfehler: $e'),
-          ),
-        );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isSubmitting = false;
-          });
-        }
-      }
+  Future<void> _sendToBackend(String text) async {
+    if (text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a reason.')),
+      );
+      return;
     }
 
-  // ---------------- API CALL: VOICE ----------------
+    setState(() {
+      _isSubmitting = true;
+      _allowResult = null;
+      _allowedMinutes = null;
+      _replyMessage = null;
+    });
 
-    Future<void> _sendVoiceToBackend(String path) async {
-      final file = File(path);
-      if (!await file.exists()) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Audio-Datei nicht gefunden.')),
-        );
-        return;
-      }
+    // Usage from native side
+    final usageRaw = await UsageService.getUsageSummary();
+    final usage = _stripIconsFromUsage(usageRaw);
 
-      setState(() {
-        _isSubmitting = true;
-        _allowResult = null;
-        _allowedMinutes = null;
-        _replyMessage = null;
-      });
+    // Load user_id from storage
+    final prefs = await AppPrefs.getInstance();
+    final userId = await prefs.getString(userIdKey);
 
-      // 🔹 Usage from native side
-      final usageRaw = await UsageService.getUsageSummary();
-      final usage = _stripIconsFromUsage(usageRaw);
+    final uri = Uri.parse('$API_BASE/echo');
+    debugPrint('Usage summary (text): $usage');
+    debugPrint('Usage summary (text, JSON): ${jsonEncode(usage)}');
 
-      // 🔹 Load user_id from storage
-      final prefs = await AppPrefs.getInstance();
-      final userId = await prefs.getString(userIdKey);
+    final payload = {
+      'user_id': userId,
+      'text': '[${widget.appName}] $text',
+      'usage': usage,
+    };
 
-      final uri = Uri.parse('$API_BASE/voice');
+    try {
+      final headers = await buildDefaultHeaders();
+      final resp = await http.post(
+        uri,
+        headers: headers,
+        body: jsonEncode(payload),
+      );
 
-      try {
-        final request = http.MultipartRequest('POST', uri)
-          ..files.add(
-            await http.MultipartFile.fromPath(
-              'file', // FastAPI: file: UploadFile = File(...)
-              file.path,
-              contentType: MediaType('audio', 'm4a'),
-            ),
-          )
-          // usage as JSON string
-          ..fields['usage'] = jsonEncode(usage);
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final allow = data['allow'] as bool?;
+        final time = (data['time'] as num?)?.toInt();
+        final reply = data['reply'] as String?;
 
-        // 🔹 send user_id along with the form fields
-        if (userId != null) {
-          request.fields['user_id'] = userId;
-        }
+        setState(() {
+          _allowResult = allow;
+          _allowedMinutes = time;
+          _replyMessage = reply;
+        });
 
-        // optional: also attach it as a header if your backend prefers
-        // if (userId != null) {
-        //   request.headers['X-User-Id'] = userId;
-        // }
+        ContextLogger().log('api_decision', {
+          'allow': allow,
+          'time': time,
+          'reply': reply,
+          'appName': widget.appName,
+        });
 
-        final streamed = await request.send();
-        final resp = await http.Response.fromStream(streamed);
-
-        if (resp.statusCode == 200) {
-          final data = jsonDecode(resp.body) as Map<String, dynamic>;
-          final allow = data['allow'] as bool?;
-          final time = (data['time'] as num?)?.toInt();
-          final reply = data['reply'] as String?;
-
-          setState(() {
-            _allowResult = allow;
-            _allowedMinutes = time;
-            _replyMessage = reply;
-          });
-
-          ContextLogger().log('api_decision_voice', {
-            'allow': allow,
-            'time': time,
-            'reply': reply,
-            'appName': widget.appName,
-          });
-
-          await ScreenCaptureService.captureAndSend();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Audio-Serverfehler: ${resp.statusCode}'),
-            ),
-          );
-        }
-      } catch (e) {
+        await ScreenCaptureService.captureAndSend();
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Audio-Netzwerkfehler: $e'),
+            content: Text('Server error: ${resp.statusCode}'),
           ),
         );
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isSubmitting = false;
-          });
-        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Network error: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
       }
     }
+  }
+
+  // ---------------- API CALL: VOICE (LIKE /text) ----------------
+
+  Future<void> _sendVoiceToBackend(String path) async {
+    final file = File(path);
+    if (!await file.exists()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Audio file not found.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _allowResult = null;
+      _allowedMinutes = null;
+      _replyMessage = null;
+    });
+
+    // Usage from native side
+    final usageRaw = await UsageService.getUsageSummary();
+    final usage = _stripIconsFromUsage(usageRaw);
+
+    // Load user_id from storage
+    final prefs = await AppPrefs.getInstance();
+    final userId = await prefs.getString(userIdKey);
+
+    final uri = Uri.parse('$API_BASE/voice');
+
+    try {
+      // build headers like /text (includes X-User-Id if available)
+      final headers = await buildDefaultHeaders();
+
+      final request = http.MultipartRequest('POST', uri)
+        ..files.add(
+          await http.MultipartFile.fromPath(
+            'file',
+            file.path,
+            contentType: MediaType('audio', 'm4a'),
+          ),
+        )
+        // usage as JSON string – same key as /text payload
+        ..fields['usage'] = jsonEncode(usage);
+
+      // Add user_id as a field in the form body, like /text has in its JSON
+      if (userId != null) {
+        request.fields['user_id'] = userId;
+      }
+
+      // Add all default headers (Authorization / X-User-Id etc.),
+      // but REMOVE Content-Type because MultipartRequest sets it itself.
+      request.headers.addAll(headers);
+      request.headers.remove('Content-Type');
+
+      final streamed = await request.send();
+      final resp = await http.Response.fromStream(streamed);
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final allow = data['allow'] as bool?;
+        final time = (data['time'] as num?)?.toInt();
+        final reply = data['reply'] as String?;
+
+        setState(() {
+          _allowResult = allow;
+          _allowedMinutes = time;
+          _replyMessage = reply;
+        });
+
+        ContextLogger().log('api_decision_voice', {
+          'allow': allow,
+          'time': time,
+          'reply': reply,
+          'appName': widget.appName,
+        });
+
+        await ScreenCaptureService.captureAndSend();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Audio server error: ${resp.statusCode}'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Audio network error: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
 
   // ---------------- TEXT SUBMIT ----------------
 
@@ -275,14 +443,13 @@ class _ReasonPageState extends State<ReasonPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Bitte gib zuerst einen Text ein – auch mit gewünschter Nutzungsdauer (z.B. 5 Minuten).',
+            'Please enter a short text – including how long you want to use the app (e.g. 5 minutes).',
           ),
         ),
       );
       return;
     }
 
-    // Log the submit
     ContextLogger().log('submit_text_reason', {
       'reason': textReason,
       'appName': widget.appName,
@@ -305,7 +472,7 @@ class _ReasonPageState extends State<ReasonPage> {
       if (path != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Aufnahme beendet – wird jetzt ausgewertet.'),
+            content: Text('Recording stopped – now being analyzed.'),
             duration: Duration(seconds: 1),
           ),
         );
@@ -315,7 +482,6 @@ class _ReasonPageState extends State<ReasonPage> {
           'appName': widget.appName,
         });
 
-        // send actual file to /voice
         await _sendVoiceToBackend(path);
       }
 
@@ -327,7 +493,7 @@ class _ReasonPageState extends State<ReasonPage> {
     if (!hasPermission) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Keine Mikrofonberechtigung.'),
+          content: Text('No microphone permission.'),
         ),
       );
       return;
@@ -358,7 +524,7 @@ class _ReasonPageState extends State<ReasonPage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Aufnahme gestartet...'),
+        content: Text('Recording started...'),
         duration: Duration(seconds: 1),
       ),
     );
@@ -368,17 +534,19 @@ class _ReasonPageState extends State<ReasonPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text('Warum ${widget.appName}?'),
-        backgroundColor: colorScheme.inversePrimary,
+        backgroundColor: tumBlue,
+        centerTitle: true,
+        title: Text(
+          'Why ${widget.appName}?',
+          style: const TextStyle(color: Colors.white),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // Optional: manual trigger for screen capture + context send
           IconButton(
             icon: const Icon(Icons.camera),
-            tooltip: 'Screen + Kontext senden',
+            tooltip: 'Send screen + context',
             onPressed: () async {
               await ScreenCaptureService.captureAndSend();
             },
@@ -387,24 +555,27 @@ class _ReasonPageState extends State<ReasonPage> {
       ),
       body: SafeArea(
         child: Padding(
-          // etwas Platz unten für den FAB
+          // some space at the bottom for the FAB
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Warum möchtest du gerade ${widget.appName} öffnen – und wie lange?',
+                'Why do you want to open ${widget.appName} right now – and for how long?',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
+
+              // Two big numbers: hours + requests
+              _buildTodayUsage(),
+
               const SizedBox(height: 8),
               Text(
-                'Formuliere kurz, warum du die App jetzt nutzen möchtest '
-                'und wie viel Zeit du dir geben willst (z.B. 5 Minuten, 3 Minuten).',
+                'Briefly describe why you want to use the app now and how much time you want to give yourself (e.g. 5 minutes, 3 minutes).',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 24),
 
-              // Textfeld + "WhatsApp-style" send button
+              // Textfield + send button
               Row(
                 children: [
                   Expanded(
@@ -412,10 +583,10 @@ class _ReasonPageState extends State<ReasonPage> {
                       controller: _reasonController,
                       maxLines: 1,
                       decoration: InputDecoration(
-                        labelText: 'Grund + gewünschte Zeit',
+                        labelText: 'Reason + desired time',
                         border: const OutlineInputBorder(),
                         hintText:
-                            'z.B. 5 Minuten Nachrichten checken und dann zurück zur Aufgabe',
+                            'E.g. 5 minutes to reply to messages and then back to work',
                         suffixIcon: _isSubmitting
                             ? const Padding(
                                 padding: EdgeInsets.all(12.0),
@@ -445,47 +616,14 @@ class _ReasonPageState extends State<ReasonPage> {
                 ],
               ),
 
-              const SizedBox(height: 12),
-
-              // Quick suggestion buttons WITH requested time in the text
-              Wrap(
-                spacing: 8.0,
-                runSpacing: 4.0,
-                children: _quickSuggestions.map((suggestion) {
-                  return OutlinedButton(
-                    onPressed: () {
-                      setState(() {
-                        _reasonController.text = suggestion;
-                        _reasonController.selection =
-                            TextSelection.fromPosition(
-                          TextPosition(offset: suggestion.length),
-                        );
-                      });
-
-                      ContextLogger().log('quick_suggestion_selected', {
-                        'suggestion': suggestion,
-                        'appName': widget.appName,
-                      });
-                    },
-                    child: Text(
-                      suggestion,
-                      textAlign: TextAlign.center,
-                      softWrap: true,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                }).toList(),
-              ),
-
               const SizedBox(height: 16),
 
-              // Anzeige der letzten Aufnahme (optional)
+              // Recording status / last recording
               if (_audioPath != null || _isRecording) ...[
                 Text(
                   _isRecording
-                      ? 'Aufnahme läuft ...'
-                      : 'Letzte Aufnahme: ${File(_audioPath!).uri.pathSegments.last}',
+                      ? 'Recording in progress...'
+                      : 'Last recording: ${File(_audioPath!).uri.pathSegments.last}',
                   style: Theme.of(context).textTheme.bodySmall,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -516,7 +654,7 @@ class _ReasonPageState extends State<ReasonPage> {
                             children: [
                               Text(
                                 _allowResult!
-                                    ? 'Go for it - don\'t loose yourself!'
+                                    ? 'Go for it – but don\'t lose yourself!'
                                     : 'Try again later!',
                                 style: Theme.of(context)
                                     .textTheme
@@ -536,7 +674,7 @@ class _ReasonPageState extends State<ReasonPage> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8.0),
                                   child: Text(
-                                    'Erlaubte Zeit: $_allowedMinutes Minuten.',
+                                    'Allowed time: $_allowedMinutes minutes.',
                                     style: Theme.of(context)
                                         .textTheme
                                         .labelLarge
@@ -561,13 +699,13 @@ class _ReasonPageState extends State<ReasonPage> {
         ),
       ),
 
-      // Mic FAB in the middle bottom
+      // Mic FAB in the middle bottom, TUM blue
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: FloatingActionButton(
         onPressed: _isSubmitting ? null : _toggleRecording,
-        backgroundColor:
-            _isRecording ? Colors.red.shade600 : colorScheme.primary,
-        tooltip: _isRecording ? 'Aufnahme stoppen' : 'Sprachaufnahme starten',
+        backgroundColor: _isRecording ? tumBlue.withOpacity(0.8) : tumBlue,
+        tooltip:
+            _isRecording ? 'Stop recording' : 'Start voice recording',
         elevation: 4,
         child: Icon(
           _isRecording ? Icons.stop : Icons.mic,

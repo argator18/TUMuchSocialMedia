@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_svg/flutter_svg.dart'; 
 
 import 'app_storage.dart';
 import 'app_configs.dart';
@@ -182,7 +183,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const Icon(Icons.spa, size: 80, color: Colors.green),
+              // Dein Logo-Widget ist hier korrekt eingebunden
+            SvgPicture.asset(
+              'assets/images/tumuch_logo.svg', // <-- Dateipfad deines SVGs
+              width: 100, 
+              height: 100,
+              // Da SVGs Vektoren sind, sind sie automatisch scharf.
+              // Optional: Wenn dein SVG weiß ist und du es blau färben willst:
+              // colorFilter: ColorFilter.mode(Colors.blue, BlendMode.srcIn), 
+            ),
             const SizedBox(height: 30),
             const Text(
               'You are using TUMuch Social Media',
@@ -221,6 +230,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
+            // Dein Logo-Widget ist hier korrekt eingebunden
             const Icon(Icons.security, size: 80, color: Colors.blue),
             const SizedBox(height: 30),
             const Text(
