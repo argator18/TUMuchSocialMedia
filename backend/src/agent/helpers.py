@@ -72,7 +72,7 @@ def get_user_preferences(user_id):
     latest = user_entries.iloc[0]
     
     # Return a tuple (preference, preferred_personality)
-    return latest["preference"], latest["preferred_personality"]
+    return latest["preference"], latest["preferred_personality"], latest['selected_apps']
 
 def get_name(id):
     # Filter entries for this user
@@ -125,6 +125,51 @@ def update_log(user_id, query, answer):
 
     log_df.to_pickle(log_path)
 
+def format_time_factors_to_str(factors):
+    times = [
+        "In the morning hours after waking up",
+        "During work hours",
+        "After work and in the evening",
+        "During the late evening before sleep"
+    ]
+
+    timing_pref_statements = []
+
+    for i, factor in enumerate(factors):
+        time = times[i]
+
+        match factor:
+            case 0 | 1 | 2 | 3:
+                # Factor too low → skip
+                continue
+
+            case 4 | 5 | 6:
+                timing_pref_statements.append(
+                    f"{time}: The user wants to reduce their usage during this period."
+                )
+
+            case 7 | 8:
+                timing_pref_statements.append(
+                    f"{time}: The user should only use the apps for a good or meaningful reason."
+                )
+
+            case 9 | 10:
+                timing_pref_statements.append(
+                    f"{time}: Usage should generally not be allowed at this time. Only Emergencies"
+                )
+
+            case _:
+                # Ignore invalid values
+                continue
+
+    if timing_pref_statements:
+        "\n".join(["Additionally the user has whishes for these specific times:"] + timing_pref_statements)
+    else:
+        return ""
+
+    return timing_pref_statements
+
+
 def add_user(onboarding_config):
     global users_df
     global preferences_df
@@ -148,20 +193,24 @@ def add_user(onboarding_config):
     users_df.to_pickle(users_path)
 
     # Now the preferences:
-    apps = str(onboarding_config['apps']).strip("[]")
+    apps_list = onboarding_config['apps']
+    apps = str(apps_list).strip("[]")
     morning_factor = onboarding_config['morning_factor']
     worktime_factor = onboarding_config['worktime_factor']
     evening_factor = onboarding_config['evening_factor']
     before_bed_factor = onboarding_config['before_bed_factor']
+        
+    factors = [morning_factor, worktime_factor,evening_factor, before_bed_factor]
+
+    timing_preference = format_time_factors_to_str(factors)
+
 
     preference = f"""
     The user want to restrict his usage on the following app: {apps}
 
-    For the different times of the day we want the following controls:
-    after waking up: {morning_factor}
-    during working time: {worktime_factor}
-    in the evening: {evening_factor}
-    before going to bed: {before_bed_factor}
+    His longterm goal is to achieve a constant combined screentime of these apps at around 1 hour.
+
+    {timing_preference}
 
     each number is between 1 and 10. 
     10 means at this time you are ought to be very strict during that time period. 
@@ -176,7 +225,8 @@ def add_user(onboarding_config):
         "date_time": date_time,
         "user_id": id,
         "preference": preference,
-        "preferred_personality": personality
+        "preferred_personality": personality,
+        "selected_apps": apps_list
     }])
 
     # append to the pkl
