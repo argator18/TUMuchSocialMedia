@@ -95,7 +95,6 @@ async def voice(
 
 @router.post("/supervise")
 async def supervise(payload: SuperviseInput):
-    print("payload:", payload, flush=True)
 
     image_bytes = None
     if payload.image:

@@ -10,6 +10,9 @@ from src.config.events import execute_backend_server_event_handler, terminate_ba
 from src.config.manager import settings
 from .api.routes.test import router as test_router
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi import Request
 
 def initialize_backend_application() -> fastapi.FastAPI:
     app = fastapi.FastAPI(**settings.set_backend_app_attributes)  # type: ignore
@@ -22,14 +25,25 @@ def initialize_backend_application() -> fastapi.FastAPI:
         allow_headers=settings.ALLOWED_HEADERS,
     )
 
-    # app.add_event_handler(
-    #     "startup",
-    #     execute_backend_server_event_handler(backend_app=app),
-    # )
-    # app.add_event_handler(
-    #     "shutdown",
-    #     terminate_backend_server_event_handler(backend_app=app),
-    # )
+    # --- Custom 422 handler ---
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        readable = []
+        for err in exc.errors():
+            loc = " -> ".join(str(x) for x in err["loc"])
+            msg = err["msg"]
+            readable.append(f"{loc}: {msg}")
+
+        print(readable)
+
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "Invalid request payload.",
+                "messages": readable,
+                "received_body": exc.body,
+            },
+        )
 
     app.include_router(router=api_endpoint_router, prefix=settings.API_PREFIX)
     app.include_router(test_router)
