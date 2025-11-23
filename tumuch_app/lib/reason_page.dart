@@ -10,6 +10,7 @@ import 'package:http_parser/http_parser.dart'; // for MediaType
 import 'context_logger.dart';
 import 'screen_capture_service.dart';
 import 'app_configs.dart';
+import 'usage_service.dart';
 
 class ReasonPage extends StatefulWidget {
   /// Optionally pass the app name, e.g. ReasonPage(appName: 'Instagram')
@@ -67,152 +68,159 @@ class _ReasonPageState extends State<ReasonPage> {
 
   // ---------------- API CALL: TEXT ----------------
 
-  Future<void> _sendToBackend(String text) async {
-    if (text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bitte gib einen Grund an.')),
-      );
-      return;
-    }
+Future<void> _sendToBackend(String text) async {
+  if (text.trim().isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Bitte gib einen Grund an.')),
+    );
+    return;
+  }
 
-    setState(() {
-      _isSubmitting = true;
-      _allowResult = null;
-      _allowedMinutes = null;
-      _replyMessage = null;
-    });
+  setState(() {
+    _isSubmitting = true;
+    _allowResult = null;
+    _allowedMinutes = null;
+    _replyMessage = null;
+  });
 
-    final uri = Uri.parse('$API_BASE/echo');
-    final payload = {
-      // simplest: encode app + reason together
-      'text': '[${widget.appName}] $text',
-    };
+  // 🔹 NEW: get usage data from native side
+  final usage = await UsageService.getUsageSummary();
 
-    try {
-      final resp = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(payload),
-      );
+  final uri = Uri.parse('$API_BASE/echo');
+  final payload = {
+    // simplest: encode app + reason together
+    'text': '[${widget.appName}] $text',
+    'usage': usage, // 🔹 NEW: attach usage as an array
+  };
 
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        final allow = data['allow'] as bool?;
-        final time = (data['time'] as num?)?.toInt();
-        final reply = data['reply'] as String?;
+  try {
+    final resp = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
 
-        setState(() {
-          _allowResult = allow;
-          _allowedMinutes = time;
-          _replyMessage = reply;
-        });
+    if (resp.statusCode == 200) {
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      final allow = data['allow'] as bool?;
+      final time = (data['time'] as num?)?.toInt();
+      final reply = data['reply'] as String?;
 
-        // 3) Log the decision
-        ContextLogger().log('api_decision', {
-          'allow': allow,
-          'time': time,
-          'reply': reply,
-          'appName': widget.appName,
-        });
+      setState(() {
+        _allowResult = allow;
+        _allowedMinutes = time;
+        _replyMessage = reply;
+      });
 
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Serverfehler: ${resp.statusCode}'),
-          ),
-        );
-      }
-    } catch (e) {
+      ContextLogger().log('api_decision', {
+        'allow': allow,
+        'time': time,
+        'reply': reply,
+        'appName': widget.appName,
+      });
+
+      // optional: screen capture + send
+      await ScreenCaptureService.captureAndSend();
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Netzwerkfehler: $e'),
+          content: Text('Serverfehler: ${resp.statusCode}'),
         ),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Netzwerkfehler: $e'),
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isSubmitting = false;
+      });
     }
   }
+}
 
   // ---------------- API CALL: VOICE ----------------
 
-  Future<void> _sendVoiceToBackend(String path) async {
-    final file = File(path);
-    if (!await file.exists()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Audio-Datei nicht gefunden.')),
-      );
-      return;
-    }
+    Future<void> _sendVoiceToBackend(String path) async {
+      final file = File(path);
+      if (!await file.exists()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Audio-Datei nicht gefunden.')),
+        );
+        return;
+      }
 
-    setState(() {
-      _isSubmitting = true;
-      _allowResult = null;
-      _allowedMinutes = null;
-      _replyMessage = null;
-    });
+      setState(() {
+        _isSubmitting = true;
+        _allowResult = null;
+        _allowedMinutes = null;
+        _replyMessage = null;
+      });
 
-    final uri = Uri.parse('$API_BASE/voice');
+      // 🔹 NEW: get usage data
+      final usage = await UsageService.getUsageSummary();
 
-    try {
-      final request = http.MultipartRequest('POST', uri)
-        ..files.add(
-          await http.MultipartFile.fromPath(
-            'file', // FastAPI: file: UploadFile = File(...)
-            file.path,
-            contentType: MediaType('audio', 'm4a'),
-          ),
-        )
-        ..fields['app'] = widget.appName; // optional metadata
-      // ..fields['note'] = _reasonController.text; // optional note
+      final uri = Uri.parse('$API_BASE/voice');
 
-      final streamed = await request.send();
-      final resp = await http.Response.fromStream(streamed);
+      try {
+        final request = http.MultipartRequest('POST', uri)
+          ..files.add(
+            await http.MultipartFile.fromPath(
+              'file', // FastAPI: file: UploadFile = File(...)
+              file.path,
+              contentType: MediaType('audio', 'm4a'),
+            ),
+          )
+          ..fields['usage'] = jsonEncode(usage); // 🔹 NEW: usage as JSON string
 
-      if (resp.statusCode == 200) {
-        // If your /voice endpoint also returns {allow, time, reply}
-        final data = jsonDecode(resp.body) as Map<String, dynamic>;
-        final allow = data['allow'] as bool?;
-        final time = (data['time'] as num?)?.toInt();
-        final reply = data['reply'] as String?;
+        final streamed = await request.send();
+        final resp = await http.Response.fromStream(streamed);
 
-        setState(() {
-          _allowResult = allow;
-          _allowedMinutes = time;
-          _replyMessage = reply;
-        });
+        if (resp.statusCode == 200) {
+          final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          final allow = data['allow'] as bool?;
+          final time = (data['time'] as num?)?.toInt();
+          final reply = data['reply'] as String?;
 
-        ContextLogger().log('api_decision_voice', {
-          'allow': allow,
-          'time': time,
-          'reply': reply,
-          'appName': widget.appName,
-        });
+          setState(() {
+            _allowResult = allow;
+            _allowedMinutes = time;
+            _replyMessage = reply;
+          });
 
-      } else {
+          ContextLogger().log('api_decision_voice', {
+            'allow': allow,
+            'time': time,
+            'reply': reply,
+            'appName': widget.appName,
+          });
+
+          await ScreenCaptureService.captureAndSend();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Audio-Serverfehler: ${resp.statusCode}'),
+            ),
+          );
+        }
+      } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Audio-Serverfehler: ${resp.statusCode}'),
+            content: Text('Audio-Netzwerkfehler: $e'),
           ),
         );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Audio-Netzwerkfehler: $e'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isSubmitting = false;
+          });
+        }
       }
     }
-  }
 
   // ---------------- TEXT SUBMIT ----------------
 
@@ -463,8 +471,8 @@ class _ReasonPageState extends State<ReasonPage> {
                             children: [
                               Text(
                                 _allowResult!
-                                    ? 'Go for it – aber bewusst!'
-                                    : 'Heute lieber nicht.',
+                                    ? 'Go for it - don\'t loose yourself!'
+                                    : 'Try again later!',
                                 style: Theme.of(context)
                                     .textTheme
                                     .titleMedium

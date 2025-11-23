@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
+import 'usage_service.dart'; // ⬅️ NEW: import for step 6
+
 // Widget zur Anzeige des Haupt-Dashboards.
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -15,9 +17,10 @@ class HomePage extends StatelessWidget {
     );
 
     // Berechnung des durchschnittlichen "Naughty Score"
-    final double averageScore = naughtyScores.reduce((a, b) => a + b) / naughtyScores.length;
+    final double averageScore =
+        naughtyScores.reduce((a, b) => a + b) / naughtyScores.length;
     final String averageScoreString = averageScore.toStringAsFixed(1);
-    
+
     // Die Farbe des Gesamtergebnisses hängt vom Durchschnitt ab
     Color scoreColor;
     if (averageScore <= 30) {
@@ -59,24 +62,30 @@ class HomePage extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium!
+                          .copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: Theme.of(context).textTheme.bodySmall!.copyWith(color: Colors.grey.shade600),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall!
+                          .copyWith(color: Colors.grey.shade600),
                     ),
                   ],
                 ),
                 const Spacer(),
-                const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                const Icon(Icons.arrow_forward_ios,
+                    size: 16, color: Colors.grey),
               ],
             ),
           ),
         ),
       );
     }
-
 
     return Scaffold(
       appBar: AppBar(
@@ -91,13 +100,18 @@ class HomePage extends StatelessWidget {
             // Gesamtpunktzahl-Karte (Naughty Score)
             Card(
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Row(
                   children: [
                     Icon(
-                      averageScore <= 30 ? Icons.mood : (averageScore <= 65 ? Icons.sentiment_neutral : Icons.mood_bad),
+                      averageScore <= 30
+                          ? Icons.mood
+                          : (averageScore <= 65
+                              ? Icons.sentiment_neutral
+                              : Icons.mood_bad),
                       color: scoreColor,
                       size: 40,
                     ),
@@ -148,10 +162,10 @@ class HomePage extends StatelessWidget {
                 children: naughtyScores.asMap().entries.map((entry) {
                   final index = entry.key;
                   final score = entry.value.toDouble();
-                  
+
                   // Skaliere den Score auf die Containerhöhe (max. 150 Pixel für den Balken)
                   final double barHeight = score * 1.5;
-                  
+
                   // Farbe des Balkens
                   Color barColor;
                   if (score <= 30) {
@@ -181,7 +195,8 @@ class HomePage extends StatelessWidget {
                       // Tag-Beschriftung
                       Text(
                         'Tag ${10 - index}', // 10, 9, 8, ...
-                        style: const TextStyle(fontSize: 10, color: Colors.black54),
+                        style: const TextStyle(
+                            fontSize: 10, color: Colors.black54),
                       ),
                       const SizedBox(height: 10),
                     ],
@@ -189,10 +204,10 @@ class HomePage extends StatelessWidget {
                 }).toList(),
               ),
             ),
-            
+
             const SizedBox(height: 30),
-            
-            // NEUE NAVIGATIONSELEMENTE
+
+            // NAVIGATIONSELEMENTE
             Text(
               'Einstellungen und Anpassungen',
               style: Theme.of(context).textTheme.titleLarge,
@@ -206,21 +221,39 @@ class HomePage extends StatelessWidget {
               color: Theme.of(context).colorScheme.primary,
               routeName: '/goals',
             ),
-            
-            // Navigator-Karte für den Motivationsgrund (ReasonPage) - WIEDER HINZUGEFÜGT
+
             _buildNavigationCard(
               title: 'Motivationsgrund ändern',
-              subtitle: 'Ihre Begründung für die App-Nutzung bearbeiten (Text/Sprache/Lern-Grund).',
+              subtitle:
+                  'Ihre Begründung für die App-Nutzung bearbeiten (Text/Sprache/Lern-Grund).',
               icon: Icons.campaign,
               color: Theme.of(context).colorScheme.secondary,
               routeName: '/reason',
             ),
-            
+
+            const SizedBox(height: 10),
+
+            // 6) Button, um Nutzungszugriff zu erlauben (öffnet System-Settings)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  await UsageService.openUsageSettings();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Bitte gewähren Sie in den Einstellungen den "Nutzungszugriff" für diese App.'),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.settings),
+                label: const Text('Nutzungszugriff erlauben'),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
-
 
