@@ -14,6 +14,7 @@ router = APIRouter()
 class UsageItem(BaseModel):
     packageName: str
     totalTimeForeground: int
+    totalMinutes: int
     lastTimeUsed: Any
 
 class BaseMessage(BaseModel):
