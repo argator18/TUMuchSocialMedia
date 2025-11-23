@@ -10,11 +10,16 @@ import src.agent.supervisor as supervisor
 
 router = APIRouter()
 
-class Message(BaseModel):
-    text: str
-    usage: str
-    
 
+class UsageItem(BaseModel):
+    packageName: str
+    minutesUsed: int
+
+class BaseMessage(BaseModel):
+    text: str
+    usage: list[UsageItem]
+    user_id: str
+    
 class OnboardInput(BaseModel):
     config: Dict[str, Any]
 
@@ -25,10 +30,11 @@ class SuperviseInput(BaseModel):
     
 
 @router.post("/echo")
-async def echo(msg: Message):
+async def echo(msg: BaseMessage):
     agent_reply = await agent.ask_for_app_permission(
-        "682596a5-7863-4419-9138-5f52c2779e61",
+        user_id=msg.user_id,
         msg.text,
+        app_usage=msg.usage
     )
 
     return JSONResponse(
