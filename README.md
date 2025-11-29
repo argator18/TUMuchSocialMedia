@@ -55,6 +55,8 @@ Run the server:
 
 ```bash
 uvicorn main:backend_app --reload --host 0.0.0.0 --port 8000
+# actually you can execute from the backend folder this
+uvicorn src.main:backend_app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ---
