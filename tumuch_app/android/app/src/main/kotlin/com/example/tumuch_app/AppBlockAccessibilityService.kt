@@ -1,4 +1,4 @@
-package com.example.tumuch_app   // <-- CHANGE to your real package
+package com.example.tumuch_app   // <-- keep your real package
 
 import android.os.Handler
 import android.os.Looper
@@ -7,11 +7,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.content.Intent
 import android.content.Context
 import android.util.Log
-import android.view.accessibility.AccessibilityNodeInfo   // <- ADD THIS
-
-
-
-
+import android.view.accessibility.AccessibilityNodeInfo
 
 class AppBlockAccessibilityService : AccessibilityService() {
 
@@ -22,9 +18,10 @@ class AppBlockAccessibilityService : AccessibilityService() {
         private const val PREFS_NAME = "app_block_prefs"
         private const val KEY_USED_MILLIS = "used_millis_instagram"
         private const val KEY_SEEN_INTRO = "seen_instagram_intro"
+        private const val KEY_ALLOWED_UNTIL = "allowed_until_instagram"  // <-- NEW
 
-        // 30 minutes in milliseconds
-        //private const val LIMIT_MILLIS = 30L * 60L * 1000L
+        // 30 minutes in milliseconds (here: 1 minute for testing)
+        // private const val LIMIT_MILLIS = 30L * 60L * 1000L
         private const val LIMIT_MILLIS = 60L * 1000L
     }
 
@@ -52,21 +49,20 @@ class AppBlockAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return
         val now = System.currentTimeMillis()
 
-        if (event?.packageName?.toString() == "com.android.chrome" || event?.packageName?.toString() == "org.mozilla.firefox") {
+        if (event.packageName?.toString() == "com.android.chrome" ||
+            event.packageName?.toString() == "org.mozilla.firefox"
+        ) {
             val url = findUrlInTree(root)
             if (url != null) {
-                Log.d("AppBlockService", "Aktuelle URL: $url")
+                Log.d(TAG, "Aktuelle URL: $url")
             }
             if (!url.isNullOrEmpty() && url.contains("instagram", ignoreCase = true)) {
                 performGlobalAction(GLOBAL_ACTION_BACK)
                 handleInstagramForeground(now)
             }
-
+        } else {
+            Log.d(TAG, "Package: ${event.packageName}")
         }
-        else{
-            Log.d(TAG, "Package: ${event?.packageName}")
-        }
-
 
         if (pkg == INSTAGRAM_PACKAGE) {
             handleInstagramForeground(now)
@@ -76,6 +72,19 @@ class AppBlockAccessibilityService : AccessibilityService() {
     }
 
     private fun handleInstagramForeground(now: Long) {
+        // ---------- NEW: respect allowed-until window ----------
+        val allowedUntil = prefs.getLong(KEY_ALLOWED_UNTIL, 0L)
+        if (allowedUntil > 0L && now < allowedUntil) {
+            Log.d(
+                TAG,
+                "Instagram currently allowed until $allowedUntil (now=$now) -> letting it run"
+            )
+            // This session should NOT count towards the base daily limit
+            currentInstagramStart = null
+            return
+        }
+        // ------------------------------------------------------
+
         var used = prefs.getLong(KEY_USED_MILLIS, 0L)
         val seenIntro = prefs.getBoolean(KEY_SEEN_INTRO, false)
 
@@ -95,7 +104,7 @@ class AppBlockAccessibilityService : AccessibilityService() {
         val sessionStart = currentInstagramStart
         if (sessionStart != null) {
             val total = used + (now - sessionStart)
-            Log.d(TAG, "Instagram total usage so far: $total ms")
+            Log.d(TAG, "Instagram total usage so far (limit-phase): $total ms")
 
             if (total >= LIMIT_MILLIS) {
                 // Save the updated total and block
@@ -133,13 +142,14 @@ class AppBlockAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {
         // No special cleanup
     }
+
     private fun launchOurApp() {
         try {
             val intent = Intent(this, MainActivity::class.java).apply {
                 // Kill any existing task for this app and start a new one
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            Intent.FLAG_ACTIVITY_CLEAR_TASK
                 )
                 putExtra("route", "/reason")
             }
@@ -150,23 +160,25 @@ class AppBlockAccessibilityService : AccessibilityService() {
         }
     }
 
-
     // test: check browser content:
     private fun findUrlInTree(node: AccessibilityNodeInfo): String? {
         val txt = node.text?.toString() ?: ""
 
-        if (txt.startsWith("http://") || txt.startsWith("https://")|| txt.endsWith(".com")|| txt.endsWith(".de")) {
+        if (txt.startsWith("http://") ||
+            txt.startsWith("https://") ||
+            txt.endsWith(".com") ||
+            txt.endsWith(".de")
+        ) {
             return txt
         }
 
         for (i in 0 until node.childCount) {
-            val child = node.getChild(i) ?: continue
-            val res = findUrlInTree(child)
-            child.recycle()
-            if (res != null) return res
+          val child = node.getChild(i) ?: continue
+          val res = findUrlInTree(child)
+          child.recycle()
+          if (res != null) return res
         }
         return null
     }
-
 }
 

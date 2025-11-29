@@ -1,8 +1,8 @@
-import 'dart:async'; // <-- for Timer
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // <-- for MethodChannel
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
@@ -28,6 +28,10 @@ class ReasonPage extends StatefulWidget {
 }
 
 class _ReasonPageState extends State<ReasonPage> {
+  // ----- NATIVE CHANNEL -----
+  static const String _channelName = 'app.channel.route';
+  static final MethodChannel _platform = MethodChannel(_channelName);
+
   final TextEditingController _reasonController = TextEditingController();
   final AudioRecorder _recorder = AudioRecorder();
 
@@ -42,12 +46,6 @@ class _ReasonPageState extends State<ReasonPage> {
 
   // Cached future so we don't call /todays_count + usage on every rebuild
   late Future<Map<String, dynamic>> _todaySummaryFuture;
-
-  // Cooldown state (for “you can’t ask again for 5 minutes”)
-  Duration _cooldownRemaining = Duration.zero;
-  Timer? _cooldownTimer;
-
-  bool get _isInCooldown => _cooldownRemaining.inSeconds > 0;
 
   /// Remove heavy/icon fields from usage list before sending to backend.
   List<dynamic> _stripIconsFromUsage(List<dynamic> usage) {
@@ -78,45 +76,9 @@ class _ReasonPageState extends State<ReasonPage> {
 
   @override
   void dispose() {
-    _cooldownTimer?.cancel();
     _reasonController.dispose();
     _recorder.dispose();
     super.dispose();
-  }
-
-  /// Start a cooldown (e.g. 5 minutes) after a denied request
-  void _startCooldown(Duration duration) {
-    _cooldownTimer?.cancel();
-    setState(() {
-      _cooldownRemaining = duration;
-    });
-
-    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_cooldownRemaining.inSeconds <= 1) {
-        timer.cancel();
-        setState(() {
-          _cooldownRemaining = Duration.zero;
-        });
-      } else {
-        setState(() {
-          _cooldownRemaining =
-              _cooldownRemaining - const Duration(seconds: 1);
-        });
-      }
-    });
-  }
-
-  String _formatCooldown(Duration d) {
-    final totalSeconds = d.inSeconds;
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    final mm = minutes.toString().padLeft(2, '0');
-    final ss = seconds.toString().padLeft(2, '0');
-    return '$mm:$ss';
   }
 
   /// If you want to re-fetch the numbers (e.g. after a successful request),
@@ -125,6 +87,25 @@ class _ReasonPageState extends State<ReasonPage> {
     setState(() {
       _todaySummaryFuture = _loadTodaySummary();
     });
+  }
+
+  // ---------------- ALLOW-WINDOW → ANDROID SERVICE ----------------
+
+  Future<void> _setAllowedTimeOnNative(int? minutes) async {
+    if (minutes == null || minutes <= 0) return;
+
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final allowedUntil = nowMs + minutes * 60 * 1000;
+
+    try {
+      await _platform.invokeMethod('setAllowedUntil', {
+        'appName': widget.appName,      // e.g. "Instagram"
+        'allowedUntil': allowedUntil,   // ms since epoch
+      });
+      debugPrint('setAllowedUntil sent: $allowedUntil for ${widget.appName}');
+    } catch (e) {
+      debugPrint('Error calling setAllowedUntil: $e');
+    }
   }
 
   // ---------------- HELPERS FOR TODAY'S SUMMARY ----------------
@@ -214,7 +195,7 @@ class _ReasonPageState extends State<ReasonPage> {
 
   Widget _buildTodayUsage() {
     return FutureBuilder<Map<String, dynamic>>(
-      future: _todaySummaryFuture, // ⬅️ cached future, not a new call
+      future: _todaySummaryFuture, // cached future
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
@@ -336,15 +317,6 @@ class _ReasonPageState extends State<ReasonPage> {
       return;
     }
 
-    if (_isInCooldown) {
-      final msg =
-          'You need to wait ${_formatCooldown(_cooldownRemaining)} before asking again.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
-      return;
-    }
-
     setState(() {
       _isSubmitting = true;
       _allowResult = null;
@@ -390,6 +362,11 @@ class _ReasonPageState extends State<ReasonPage> {
           _replyMessage = reply;
         });
 
+        // 🔹 Tell native side about allowed time window
+        if (allow == true && time != null && time > 0) {
+          await _setAllowedTimeOnNative(time);
+        }
+
         ContextLogger().log('api_decision', {
           'allow': allow,
           'time': time,
@@ -397,12 +374,7 @@ class _ReasonPageState extends State<ReasonPage> {
           'appName': widget.appName,
         });
 
-        // If denied → start 5 min cooldown
-        if (allow == false) {
-          _startCooldown(const Duration(minutes: 5));
-        }
-
-        // Refresh request counters after a decision
+        // If you want to refresh the counters after a decision:
         _refreshTodaySummary();
 
         await ScreenCaptureService.captureAndSend();
@@ -431,15 +403,6 @@ class _ReasonPageState extends State<ReasonPage> {
   // ---------------- API CALL: VOICE (LIKE /text) ----------------
 
   Future<void> _sendVoiceToBackend(String path) async {
-    if (_isInCooldown) {
-      final msg =
-          'You need to wait ${_formatCooldown(_cooldownRemaining)} before asking again.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
-      return;
-    }
-
     final file = File(path);
     if (!await file.exists()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -504,17 +467,17 @@ class _ReasonPageState extends State<ReasonPage> {
           _replyMessage = reply;
         });
 
+        // 🔹 Tell native side about allowed time window
+        if (allow == true && time != null && time > 0) {
+          await _setAllowedTimeOnNative(time);
+        }
+
         ContextLogger().log('api_decision_voice', {
           'allow': allow,
           'time': time,
           'reply': reply,
           'appName': widget.appName,
         });
-
-        // If denied → start 5 min cooldown
-        if (allow == false) {
-          _startCooldown(const Duration(minutes: 5));
-        }
 
         // Refresh counters after a voice decision as well
         _refreshTodaySummary();
@@ -568,15 +531,6 @@ class _ReasonPageState extends State<ReasonPage> {
   // ---------------- VOICE RECORDING ----------------
 
   Future<void> _toggleRecording() async {
-    if (_isInCooldown) {
-      final msg =
-          'You need to wait ${_formatCooldown(_cooldownRemaining)} before asking again.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
-      return;
-    }
-
     if (_isRecording) {
       // Stop recording -> auto send
       final path = await _recorder.stop();
@@ -650,9 +604,6 @@ class _ReasonPageState extends State<ReasonPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cooldownText =
-        _isInCooldown ? 'You can ask again in ${_formatCooldown(_cooldownRemaining)}.' : null;
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: tumBlue,
@@ -687,17 +638,6 @@ class _ReasonPageState extends State<ReasonPage> {
               // Two big numbers: hours + requests
               _buildTodayUsage(),
 
-              if (cooldownText != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  cooldownText,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.redAccent,
-                  ),
-                ),
-              ],
-
               const SizedBox(height: 8),
               Text(
                 'Briefly describe why you want to use the app now and how much time you want to give yourself (e.g. 5 minutes, 3 minutes).',
@@ -712,7 +652,6 @@ class _ReasonPageState extends State<ReasonPage> {
                     child: TextField(
                       controller: _reasonController,
                       maxLines: 1,
-                      enabled: !_isInCooldown && !_isSubmitting,
                       decoration: InputDecoration(
                         labelText: 'Reason + desired time',
                         border: const OutlineInputBorder(),
@@ -731,9 +670,7 @@ class _ReasonPageState extends State<ReasonPage> {
                               )
                             : IconButton(
                                 icon: const Icon(Icons.send),
-                                onPressed: (_isInCooldown || _isSubmitting)
-                                    ? null
-                                    : _submitText,
+                                onPressed: _submitText,
                               ),
                       ),
                       onChanged: (value) {
@@ -743,11 +680,7 @@ class _ReasonPageState extends State<ReasonPage> {
                           'appName': widget.appName,
                         });
                       },
-                      onSubmitted: (_) {
-                        if (!_isInCooldown && !_isSubmitting) {
-                          _submitText();
-                        }
-                      },
+                      onSubmitted: (_) => _submitText(),
                     ),
                   ),
                 ],
@@ -839,14 +772,10 @@ class _ReasonPageState extends State<ReasonPage> {
       // Mic FAB in the middle bottom, TUM blue
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: FloatingActionButton(
-        onPressed:
-            (_isSubmitting || _isInCooldown) ? null : _toggleRecording,
-        backgroundColor: _isRecording
-            ? tumBlue.withOpacity(0.8)
-            : tumBlue,
-        tooltip: _isRecording
-            ? 'Stop recording'
-            : 'Start voice recording',
+        onPressed: _isSubmitting ? null : _toggleRecording,
+        backgroundColor: _isRecording ? tumBlue.withOpacity(0.8) : tumBlue,
+        tooltip:
+            _isRecording ? 'Stop recording' : 'Start voice recording',
         elevation: 4,
         child: Icon(
           _isRecording ? Icons.stop : Icons.mic,
@@ -857,4 +786,3 @@ class _ReasonPageState extends State<ReasonPage> {
     );
   }
 }
-

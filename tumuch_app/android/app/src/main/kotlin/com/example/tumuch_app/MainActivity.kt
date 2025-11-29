@@ -115,6 +115,20 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "setAllowedUntil" -> {
+                    val appName = call.argument<String>("appName") ?: "Instagram"
+                    val allowedUntil = call.argument<Long>("allowedUntil") ?: 0L
+
+                    val prefs = getSharedPreferences("app_block_prefs", Context.MODE_PRIVATE)
+                    if (appName == "Instagram") {
+                        prefs.edit()
+                            .putLong("allowed_until_instagram", allowedUntil)
+                            .apply()
+                    }
+                    result.success(null)
+                }
+
+
 
                 else -> result.notImplemented()
             }
