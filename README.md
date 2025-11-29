@@ -35,9 +35,10 @@ Frontend is implemented in **Flutter** and runs on **Android**.
 
 ## Getting Started
 
+### Backend
 ```bash
-git clone https://github.com/aname/appName.git
-cd appName
+git clone git@github.com:argator18/TUMuchSocialMedia.git
+cd TUMuchSocialMedia/backend
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
